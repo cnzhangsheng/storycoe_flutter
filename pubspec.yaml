@@ -1,0 +1,79 @@
+name: storybird_flutter
+description: "A premium picture book reading and creation app for children."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # AI
+  google_generative_ai: ^0.4.6
+
+  # Image
+  cached_network_image: ^3.4.1
+  image_picker: ^1.1.2
+  photo_view: ^0.15.0
+
+  # TTS (Text-to-Speech)
+  flutter_tts: ^4.0.2
+
+  # Animation
+  flutter_animate: ^4.5.2
+  shimmer: ^3.0.0
+
+  # Icons
+  lucide_icons: ^0.257.0
+
+  # Storage
+  shared_preferences: ^2.3.5
+
+  # Utils
+  uuid: ^4.5.1
+
+  # HTTP Client
+  http: ^1.2.0
+
+  # Environment
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/PlusJakartaSans-Italic.ttf
+          style: italic
+    - family: BeVietnamPro
+      fonts:
+        - asset: assets/fonts/BeVietnamPro-Regular.ttf
+        - asset: assets/fonts/BeVietnamPro-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BeVietnamPro-Medium.ttf
+          weight: 500
