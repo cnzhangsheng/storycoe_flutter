@@ -92,13 +92,13 @@ class ReadingState {
   double get speechRate {
     switch (speedLabel) {
       case '慢':
-        return 0.3;
+        return 0.0;
       case '中':
-        return 0.45;
+        return 0.2;
       case '正常':
-        return 0.6;
+        return 0.5;
       default:
-        return 0.45;
+        return 0.2;
     }
   }
 
