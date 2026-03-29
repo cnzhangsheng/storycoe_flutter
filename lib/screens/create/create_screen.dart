@@ -72,30 +72,6 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     }
   }
 
-  Future<void> _takePhoto() async {
-    try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-        maxWidth: 1920,
-        maxHeight: 1920,
-      );
-
-      if (photo == null) return;
-
-      final Uint8List? bytes = await photo.readAsBytes();
-      if (bytes != null) {
-        ref.read(createProvider.notifier).addImage(SelectedImage(
-          path: photo.path,
-          bytes: bytes,
-          name: photo.name,
-        ));
-      }
-    } catch (e) {
-      _showErrorSnackBar('拍摄照片失败: $e');
-    }
-  }
-
   Future<void> _pickCoverImage() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -356,127 +332,139 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           ),
           const SizedBox(height: 12),
           if (coverImage == null)
-            // 未选择封面时显示上传按钮
+            // 未选择封面时显示上传按钮（3:4 比例）
             GestureDetector(
               onTap: _pickCoverImage,
-              child: Container(
-                width: double.infinity,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
-                    width: 2,
-                    style: BorderStyle.solid,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      LucideIcons.imagePlus,
-                      size: 32,
-                      color: AppColors.onSurfaceVariant,
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
+                      width: 2,
+                      style: BorderStyle.solid,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '点击上传封面',
-                      style: TextStyle(
-                        fontSize: 14,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        LucideIcons.imagePlus,
+                        size: 40,
                         color: AppColors.onSurfaceVariant,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        '点击上传封面',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '建议使用 3:4 比例图片',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )
           else
-            // 已选择封面时显示预览
-            Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 160,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: kIsWeb
-                        ? Image.memory(
-                            coverImage.bytes!,
-                            fit: BoxFit.cover,
-                          )
-                        : Image.file(
-                            File(coverImage.path),
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                ),
-                // 删除按钮
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: GestureDetector(
-                    onTap: () {
-                      ref.read(createProvider.notifier).removeCoverImage();
-                    },
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        LucideIcons.x,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                // 封面标签
-                Positioned(
-                  left: 8,
-                  bottom: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            // 已选择封面时显示预览（3:4 比例）
+            AspectRatio(
+              aspectRatio: 3 / 4,
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.bookOpen,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          '封面',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: kIsWeb
+                          ? Image.memory(
+                              coverImage.bytes!,
+                              fit: BoxFit.cover,
+                            )
+                          : Image.file(
+                              File(coverImage.path),
+                              fit: BoxFit.cover,
+                            ),
+                    ),
                   ),
-                ),
-              ],
+                  // 删除按钮
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: GestureDetector(
+                      onTap: () {
+                        ref.read(createProvider.notifier).removeCoverImage();
+                      },
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          LucideIcons.x,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 封面标签
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.bookOpen,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            '封面',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -484,87 +472,55 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   }
 
   Widget _buildUploadButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: _pickImages,
-            child: _buildUploadButton(
-              icon: LucideIcons.imagePlus,
-              title: '从相册上传',
-              subtitle: '最多$_maxImagesPerPick张',
-              color: AppColors.tertiaryContainer,
-            ),
+    return GestureDetector(
+      onTap: _pickImages,
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
+            width: 2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.tertiaryContainer.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: GestureDetector(
-            onTap: _takePhoto,
-            child: _buildUploadButton(
-              icon: LucideIcons.camera,
-              title: '拍照上传',
-              subtitle: '拍摄绘本',
-              color: AppColors.primaryContainer,
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.tertiaryContainer,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(LucideIcons.imagePlus, size: 32, color: Colors.white),
             ),
-          ),
+            const SizedBox(height: 20),
+            const Text(
+              '从相册上传',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '选择绘本照片，最多 $_maxImagesPerPick 张',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildUploadButton({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, size: 28, color: Colors.white),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
       ),
     );
   }

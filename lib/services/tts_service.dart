@@ -2,6 +2,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+// Conditional import for Web Speech API
+import 'tts_web_stub.dart'
+    if (dart.library.js_interop) 'tts_web.dart' as tts_web;
+
 /// ========================================
 /// TTS 朗读状态枚举
 /// ========================================
@@ -19,9 +23,10 @@ enum TtsState {
 ///
 /// 特性：
 /// - 标准美式英语发音 (en-US)
-/// - 慢速儿童适配朗读
+/// - 支持语速调节（慢速/中速/正常）
 /// - 支持播放/暂停/继续/停止
 /// - 播放状态回调
+/// - Web 平台使用原生 Web Speech API
 /// ========================================
 class TtsService {
   static final TtsService _instance = TtsService._internal();
@@ -33,6 +38,8 @@ class TtsService {
   bool _isInitialized = false;
   TtsState _state = TtsState.idle;
   String? _currentText;
+  double _speechRate = 0.45; // 默认中速
+  String _language = 'en-US'; // 默认美式发音
 
   /// 状态变化回调
   VoidCallback? onStateChanged;
@@ -49,41 +56,41 @@ class TtsService {
   /// 当前播放的文本
   String? get currentText => _currentText;
 
+  /// 当前语速
+  double get speechRate => _speechRate;
+
   /// 初始化 TTS
   Future<void> init() async {
     if (_isInitialized) return;
 
     try {
-      // 设置语言为美式英语
+      // Web 平台使用原生 Web Speech API
+      if (kIsWeb) {
+        _isInitialized = true;
+        debugPrint('TTS Service initialized for Web (using Web Speech API)');
+        return;
+      }
+
+      // 移动端使用 Flutter TTS
       await _flutterTts.setLanguage('en-US');
-
-      // 设置语速（适合儿童的较慢语速：0.4）
-      await _flutterTts.setSpeechRate(0.4);
-
-      // 设置音高
+      await _flutterTts.setSpeechRate(_speechRate);
       await _flutterTts.setPitch(1.0);
-
-      // 设置音量
       await _flutterTts.setVolume(1.0);
 
-      // 设置完成回调
       _flutterTts.setCompletionHandler(() {
         _setState(TtsState.idle);
         _currentText = null;
       });
 
-      // 设置开始回调
       _flutterTts.setStartHandler(() {
         _setState(TtsState.playing);
       });
 
-      // 设置暂停回调
       _flutterTts.setCancelHandler(() {
         _setState(TtsState.idle);
         _currentText = null;
       });
 
-      // 设置错误回调
       _flutterTts.setErrorHandler((message) {
         _setState(TtsState.idle);
         _currentText = null;
@@ -105,7 +112,7 @@ class TtsService {
       }
 
       _isInitialized = true;
-      debugPrint('TTS Service initialized');
+      debugPrint('TTS Service initialized for Mobile');
     } catch (e) {
       debugPrint('TTS initialization failed: $e');
     }
@@ -130,8 +137,14 @@ class TtsService {
       }
 
       _currentText = text;
-      final result = await _flutterTts.speak(text);
 
+      // Web 平台使用原生 Web Speech API
+      if (kIsWeb) {
+        return await _speakWeb(text);
+      }
+
+      // 移动端使用 Flutter TTS
+      final result = await _flutterTts.speak(text);
       if (result == 1) {
         _setState(TtsState.playing);
         return true;
@@ -143,13 +156,51 @@ class TtsService {
     }
   }
 
+  /// Web 平台播放（使用 Web Speech API）
+  Future<bool> _speakWeb(String text) async {
+    try {
+      // 语速映射：Flutter TTS 的 0.0-1.0 映射到 Web Speech API 的 rate
+      // Web Speech API rate: 0.1 (最慢) 到 10 (最快), 1.0 是正常
+      // 我们的映射: 慢(0.3) -> 0.6, 中(0.45) -> 0.85, 正常(0.6) -> 1.1
+      final webRate = _speechRate * 2.0; // 转换为 Web Speech API 的 rate
+
+      final success = await tts_web.speak(
+        text: text,
+        rate: webRate,
+        lang: _language, // 使用当前设置的语言
+        onStart: () {
+          _setState(TtsState.playing);
+        },
+        onEnd: () {
+          _setState(TtsState.idle);
+          _currentText = null;
+        },
+        onError: (error) {
+          debugPrint('Web TTS Error: $error');
+          _setState(TtsState.idle);
+          _currentText = null;
+        },
+      );
+
+      return success;
+    } catch (e) {
+      debugPrint('Web TTS speak failed: $e');
+      return false;
+    }
+  }
+
   /// 暂停播放
   Future<void> pause() async {
     if (!_isInitialized || _state != TtsState.playing) return;
 
     try {
-      await _flutterTts.pause();
-      _setState(TtsState.paused);
+      if (kIsWeb) {
+        tts_web.pause();
+        _setState(TtsState.paused);
+      } else {
+        await _flutterTts.pause();
+        _setState(TtsState.paused);
+      }
     } catch (e) {
       debugPrint('TTS pause failed: $e');
     }
@@ -169,7 +220,11 @@ class TtsService {
     if (!_isInitialized) return;
 
     try {
-      await _flutterTts.stop();
+      if (kIsWeb) {
+        tts_web.cancel();
+      } else {
+        await _flutterTts.stop();
+      }
       _setState(TtsState.idle);
       _currentText = null;
     } catch (e) {
@@ -187,7 +242,6 @@ class TtsService {
         if (_currentText == text) {
           await pause();
         } else {
-          // 切换到新句子
           await speak(text);
         }
         break;
@@ -195,7 +249,6 @@ class TtsService {
         if (_currentText == text) {
           await resume();
         } else {
-          // 切换到新句子
           await speak(text);
         }
         break;
@@ -203,21 +256,39 @@ class TtsService {
   }
 
   /// 设置语速
-  /// [rate] 语速，0.0 - 1.0，默认 0.4（适合儿童）
+  /// [rate] 语速，0.0 - 1.0
+  /// - 慢速: 0.3
+  /// - 中速: 0.45 (默认)
+  /// - 正常: 0.6
   Future<void> setSpeechRate(double rate) async {
-    if (!_isInitialized) await init();
-    await _flutterTts.setSpeechRate(rate.clamp(0.0, 1.0));
+    _speechRate = rate.clamp(0.0, 1.0);
+    debugPrint('TTS speech rate set to: $_speechRate');
+
+    // 移动端需要更新 Flutter TTS
+    if (!kIsWeb && _isInitialized) {
+      await _flutterTts.setSpeechRate(_speechRate);
+    }
   }
 
   /// 设置语言
   Future<void> setLanguage(String language) async {
+    _language = language;
+    debugPrint('TTS language set to: $_language');
+
     if (!_isInitialized) await init();
-    await _flutterTts.setLanguage(language);
+
+    if (!kIsWeb) {
+      await _flutterTts.setLanguage(language);
+    }
   }
 
   /// 获取可用语言列表
   Future<List<String>> getLanguages() async {
     if (!_isInitialized) await init();
+
+    if (kIsWeb) {
+      return ['en-US', 'en-GB'];
+    }
 
     try {
       final languages = await _flutterTts.getLanguages;

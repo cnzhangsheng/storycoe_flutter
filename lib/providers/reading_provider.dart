@@ -27,6 +27,12 @@ class ReadingState {
   /// 是否显示翻译
   final bool showTranslation;
 
+  /// 朗读速度: '慢', '中', '正常'
+  final String speedLabel;
+
+  /// 发音偏好: '美式', '英式'
+  final String accent;
+
   /// 是否正在播放
   final bool isPlaying;
 
@@ -43,6 +49,8 @@ class ReadingState {
     this.loadedPages = const {},
     this.activeSentenceId,
     this.showTranslation = true,
+    this.speedLabel = '中',
+    this.accent = '美式',
     this.isPlaying = false,
     this.isLoading = false,
     this.error,
@@ -80,6 +88,32 @@ class ReadingState {
     return [];
   }
 
+  /// 获取语速对应的 speech rate (0.0 - 1.0)
+  double get speechRate {
+    switch (speedLabel) {
+      case '慢':
+        return 0.3;
+      case '中':
+        return 0.45;
+      case '正常':
+        return 0.6;
+      default:
+        return 0.45;
+    }
+  }
+
+  /// 获取发音对应的语言代码
+  String get languageCode {
+    switch (accent) {
+      case '英式':
+        return 'en-GB';
+      case '美式':
+        return 'en-US';
+      default:
+        return 'en-US';
+    }
+  }
+
   ReadingState copyWith({
     BookDetail? bookDetail,
     Book? currentBook,
@@ -87,6 +121,8 @@ class ReadingState {
     Map<int, BookPage>? loadedPages,
     String? activeSentenceId,
     bool? showTranslation,
+    String? speedLabel,
+    String? accent,
     bool? isPlaying,
     bool? isLoading,
     String? error,
@@ -101,6 +137,8 @@ class ReadingState {
       loadedPages: loadedPages ?? this.loadedPages,
       activeSentenceId: clearActiveSentence ? null : (activeSentenceId ?? this.activeSentenceId),
       showTranslation: showTranslation ?? this.showTranslation,
+      speedLabel: speedLabel ?? this.speedLabel,
+      accent: accent ?? this.accent,
       isPlaying: isPlaying ?? this.isPlaying,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
@@ -161,6 +199,59 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       debugPrint('[startReading] 开始阅读完成: ${book.title}, 总页数: ${state.totalPages}');
     } catch (e) {
       debugPrint('[startReading] 加载绘本失败: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: '加载绘本失败: $e',
+      );
+    }
+  }
+
+  /// ========================================
+  /// 通过 bookId 开始阅读（从创作页或直接路由进入）
+  /// ========================================
+  Future<void> startReadingById(String bookId) async {
+    debugPrint('[startReadingById] 开始阅读: bookId=$bookId');
+
+    // 如果已经加载了相同的书，跳过
+    if (state.currentBook?.id == bookId && state.bookDetail != null) {
+      debugPrint('[startReadingById] 书籍已加载，跳过');
+      return;
+    }
+
+    state = state.copyWith(
+      currentPage: 0,
+      isLoading: true,
+      clearBookDetail: true,
+      clearActiveSentence: true,
+      clearError: true,
+    );
+
+    try {
+      // 先加载绘本基本信息
+      debugPrint('[startReadingById] 加载绘本基本信息...');
+      final bookData = await booksApi.getBook(bookId);
+      final book = Book.fromJson(bookData);
+      debugPrint('[startReadingById] 绘本基本信息: title=${book.title}');
+
+      // 设置 currentBook
+      state = state.copyWith(currentBook: book);
+
+      // 加载绘本详情（包含页面和句子）
+      debugPrint('[startReadingById] 加载绘本详情...');
+      final bookDetail = BookDetail.fromJson(bookData);
+      debugPrint('[startReadingById] 解析成功: totalPages=${bookDetail.totalPages}, pages数量=${bookDetail.pages.length}');
+
+      // 更新状态
+      state = state.copyWith(
+        bookDetail: bookDetail,
+        isLoading: false,
+      );
+
+      // 加载第一页内容
+      await _loadPage(0);
+      debugPrint('[startReadingById] 开始阅读完成: ${book.title}, 总页数: ${state.totalPages}');
+    } catch (e) {
+      debugPrint('[startReadingById] 加载绘本失败: $e');
       state = state.copyWith(
         isLoading: false,
         error: '加载绘本失败: $e',
@@ -291,6 +382,24 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   }
 
   /// ========================================
+  /// 设置朗读速度
+  /// ========================================
+  void setSpeed(String speedLabel) {
+    state = state.copyWith(speedLabel: speedLabel);
+    // 更新 TTS 语速
+    _ttsService.setSpeechRate(state.speechRate);
+  }
+
+  /// ========================================
+  /// 设置发音偏好
+  /// ========================================
+  void setAccent(String accent) {
+    state = state.copyWith(accent: accent);
+    // 更新 TTS 语言
+    _ttsService.setLanguage(state.languageCode);
+  }
+
+  /// ========================================
   /// 播放句子
   /// ========================================
   Future<void> playSentence(Sentence sentence) async {
@@ -300,6 +409,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (_ttsService.isPlaying) {
       await _ttsService.stop();
     }
+
+    // 设置当前语速和语言
+    await _ttsService.setSpeechRate(state.speechRate);
+    await _ttsService.setLanguage(state.languageCode);
 
     // 设置活跃句子
     state = state.copyWith(

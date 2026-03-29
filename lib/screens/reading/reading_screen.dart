@@ -39,6 +39,29 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   final TransformationController _imageController = TransformationController();
 
   @override
+  void initState() {
+    super.initState();
+    // 检查是否需要加载书籍
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadBookIfNeeded();
+    });
+  }
+
+  /// 检查并加载书籍（如果当前没有加载或 bookId 不同）
+  void _loadBookIfNeeded() {
+    final readingState = ref.read(readingProvider);
+    final currentBookId = readingState.currentBook?.id;
+
+    // 如果 currentBook 为空或 ID 不匹配，通过 bookId 加载
+    if (currentBookId == null || currentBookId != widget.bookId) {
+      debugPrint('[ReadingScreen] 需要加载书籍: bookId=${widget.bookId}');
+      ref.read(readingProvider.notifier).startReadingById(widget.bookId);
+    } else {
+      debugPrint('[ReadingScreen] 书籍已加载: bookId=${widget.bookId}');
+    }
+  }
+
+  @override
   void dispose() {
     _imageController.dispose();
     // 离开页面时停止阅读
@@ -87,9 +110,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
                   ? _buildLandscapeLayout()
                   : _buildPortraitLayout(),
             ),
-
-            // 底部翻页控制
-            _buildBottomControls(currentPage, totalPages),
           ],
         ),
       ),
@@ -295,17 +315,14 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   Widget _buildPortraitLayout() {
     return Column(
       children: [
-        // 绘本图片区域
-        Expanded(
-          flex: 5,
-          child: _buildImageSection(),
+        // 绘本图片区域（带翻页按钮，固定高度）
+        SizedBox(
+          height: 200,
+          child: _buildImageSectionWithControls(),
         ),
 
-        const SizedBox(height: 12),
-
-        // 句子列表区域
+        // 句子列表区域（主要区域）
         Expanded(
-          flex: 5,
           child: _buildSentencesList(),
         ),
       ],
@@ -318,20 +335,88 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   Widget _buildLandscapeLayout() {
     return Row(
       children: [
-        // 左侧：绘本图片
-        Expanded(
-          flex: 5,
-          child: _buildImageSection(),
+        // 左侧：绘本图片（带翻页按钮）
+        SizedBox(
+          width: 260,
+          child: _buildImageSectionWithControls(),
         ),
 
-        const SizedBox(width: 16),
+        const SizedBox(width: 12),
 
         // 右侧：句子列表
         Expanded(
-          flex: 5,
           child: _buildSentencesList(),
         ),
       ],
+    );
+  }
+
+  /// ========================================
+  /// 绘本图片区域（带翻页按钮在两侧）
+  /// ========================================
+  Widget _buildImageSectionWithControls() {
+    final currentPage = ref.watch(readingProvider).currentPage;
+    final totalPages = ref.watch(readingProvider).totalPages;
+
+    return Row(
+      children: [
+        // 上一页按钮
+        _buildCompactPageButton(
+          icon: LucideIcons.chevronLeft,
+          enabled: currentPage > 0,
+          onTap: currentPage > 0
+              ? () {
+                  ref.read(readingProvider.notifier).prevPage();
+                  _imageController.value = Matrix4.identity();
+                }
+              : null,
+        ),
+
+        // 图片区域
+        Expanded(
+          child: _buildImageSection(),
+        ),
+
+        // 下一页按钮
+        _buildCompactPageButton(
+          icon: LucideIcons.chevronRight,
+          enabled: currentPage < totalPages - 1,
+          onTap: currentPage < totalPages - 1
+              ? () {
+                  ref.read(readingProvider.notifier).nextPage();
+                  _imageController.value = Matrix4.identity();
+                }
+              : null,
+        ),
+      ],
+    );
+  }
+
+  /// 紧凑翻页按钮
+  Widget _buildCompactPageButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: enabled
+              ? AppColors.primaryContainer.withValues(alpha: 0.9)
+              : AppColors.surfaceContainerHigh.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled
+              ? AppColors.onPrimaryContainer
+              : AppColors.onSurfaceVariant.withValues(alpha: 0.3),
+        ),
+      ),
     );
   }
 
@@ -536,78 +621,154 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     );
   }
 
-  /// 句子列表标题栏
+  /// 句子列表标题栏（紧凑设计）
   Widget _buildSentencesHeader() {
     final showTranslation = ref.watch(readingProvider).showTranslation;
+    final speedLabel = ref.watch(readingProvider).speedLabel;
+    final accent = ref.watch(readingProvider).accent;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryContainer.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              LucideIcons.messageCircle,
-              size: 20,
-              color: AppColors.primaryContainer,
+          // 标题
+          const Text(
+            '朗读练习',
+            style: TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.onPrimaryFixed,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '朗读练习',
-                  style: TextStyle(
-                    fontFamily: 'PlusJakartaSans',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.onPrimaryFixed,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  showTranslation ? '点击句子逐句朗读，长按可编辑修正' : '翻译已隐藏，点击右侧按钮显示',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 显示/隐藏翻译按钮
+          const SizedBox(width: 8),
+          // 翻译按钮
           GestureDetector(
             onTap: () {
               ref.read(readingProvider.notifier).toggleTranslation();
             },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 44,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: showTranslation
                     ? AppColors.secondaryContainer
                     : AppColors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
-                showTranslation ? LucideIcons.languages : LucideIcons.eyeOff,
-                size: 22,
-                color: showTranslation
-                    ? AppColors.onSecondaryContainer
-                    : AppColors.onSurfaceVariant,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    showTranslation ? LucideIcons.languages : LucideIcons.eyeOff,
+                    size: 12,
+                    color: showTranslation
+                        ? AppColors.onSecondaryContainer
+                        : AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    showTranslation ? '译' : '显示',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: showTranslation
+                          ? AppColors.onSecondaryContainer
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+
+          const Spacer(),
+
+          // 发音选择器（紧凑）
+          _buildCompactAccentSelector(accent),
+
+          const SizedBox(width: 6),
+
+          // 语速选择器（紧凑）
+          _buildCompactSpeedSelector(speedLabel),
         ],
+      ),
+    );
+  }
+
+  /// 紧凑发音选择器
+  Widget _buildCompactAccentSelector(String currentAccent) {
+    return Container(
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: ['美式', '英式'].map((accent) {
+          final isSelected = currentAccent == accent;
+          return GestureDetector(
+            onTap: () {
+              ref.read(readingProvider.notifier).setAccent(accent);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                accent,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppColors.onPrimaryContainer
+                      : AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 紧凑语速选择器
+  Widget _buildCompactSpeedSelector(String currentSpeed) {
+    return Container(
+      height: 26,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: ['慢', '中', '正常'].map((speed) {
+          final isSelected = currentSpeed == speed;
+          return GestureDetector(
+            onTap: () {
+              ref.read(readingProvider.notifier).setSpeed(speed);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                speed,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppColors.onPrimaryContainer
+                      : AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
