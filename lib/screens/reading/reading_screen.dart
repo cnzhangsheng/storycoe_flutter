@@ -42,6 +42,11 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 图片缩放控制器
   final TransformationController _imageController = TransformationController();
 
+  /// 添加句子状态
+  bool _isAddingSentence = false;
+  final _newSentenceController = TextEditingController();
+  bool _isSavingSentence = false;
+
   @override
   void initState() {
     super.initState();
@@ -1228,12 +1233,113 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     );
   }
 
-  /// 添加句子按钮
+  /// 添加句子按钮或输入框
   Widget _buildAddSentenceButton() {
+    // 如果正在添加句子，显示输入框
+    if (_isAddingSentence) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12, top: 8),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primaryContainer.withValues(alpha: 0.5),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 输入框
+              TextField(
+                controller: _newSentenceController,
+                autofocus: true,
+                maxLines: 3,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+                decoration: const InputDecoration(
+                  hintText: '输入英文句子...',
+                  hintStyle: TextStyle(color: AppColors.onSurfaceVariant),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // 按钮行
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // 取消按钮
+                  TextButton(
+                    onPressed: _isSavingSentence
+                        ? null
+                        : () {
+                            setState(() {
+                              _isAddingSentence = false;
+                              _newSentenceController.clear();
+                            });
+                          },
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 保存按钮
+                  ElevatedButton(
+                    onPressed: _isSavingSentence ? null : _saveNewSentence,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryContainer,
+                      foregroundColor: AppColors.onPrimaryContainer,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isSavingSentence
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.onPrimaryContainer,
+                            ),
+                          )
+                        : const Text(
+                            '保存',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 默认显示添加按钮
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, top: 8),
       child: InkWell(
-        onTap: _showAddSentenceDialog,
+        onTap: () {
+          setState(() {
+            _isAddingSentence = true;
+          });
+        },
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1269,77 +1375,41 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     );
   }
 
-  /// 显示添加句子对话框
-  Future<void> _showAddSentenceDialog() async {
-    final enController = TextEditingController();
-    final zhController = TextEditingController();
+  /// 保存新句子
+  Future<void> _saveNewSentence() async {
+    final en = _newSentenceController.text.trim();
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('添加新句子'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: enController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: '英文句子',
-                  hintText: 'Enter English sentence...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: zhController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: '中文翻译',
-                  hintText: '输入中文翻译...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('添加'),
-            ),
-          ],
-        );
-      },
-    );
+    if (en.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入英文句子')),
+      );
+      return;
+    }
 
-    if (result == true && mounted) {
-      final en = enController.text.trim();
-      final zh = zhController.text.trim();
+    setState(() {
+      _isSavingSentence = true;
+    });
 
-      if (en.isEmpty && zh.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入句子内容')),
-        );
-        return;
-      }
+    // 调用 Provider 创建句子（后端会自动翻译）
+    final newSentence = await ref.read(readingProvider.notifier).createSentence(en, '');
 
-      // 调用 Provider 创建句子
-      final newSentence = await ref.read(readingProvider.notifier).createSentence(en, zh);
+    setState(() {
+      _isSavingSentence = false;
+    });
 
-      if (newSentence != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('句子添加成功')),
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('添加失败，请重试')),
-        );
-      }
+    if (newSentence != null && mounted) {
+      setState(() {
+        _isAddingSentence = false;
+        _newSentenceController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('句子添加成功')),
+      );
+    } else if (mounted) {
+      final error = ref.read(readingProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error ?? '添加失败，请重试')),
+      );
     }
   }
 
