@@ -105,69 +105,70 @@ class _SentenceReadItemState extends ConsumerState<SentenceReadItem>
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // 底层操作栏
-        Positioned.fill(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Row(
-              children: [
-                const Spacer(),
-                // 编辑按钮
-                GestureDetector(
-                  onTap: () {
-                    _resetSwipe();
-                    _startEditing();
-                  },
-                  child: Container(
-                    width: actionWidth / 2,
-                    color: AppColors.primaryContainer,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(LucideIcons.pencil, color: AppColors.onPrimaryContainer, size: 22),
-                        const SizedBox(height: 4),
-                        Text(
-                          '修改',
-                          style: TextStyle(
-                            color: AppColors.onPrimaryContainer,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+        // 底层操作栏（仅在滑动时显示）
+        if (_swipeOffset < 0)
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Row(
+                children: [
+                  const Spacer(),
+                  // 编辑按钮
+                  GestureDetector(
+                    onTap: () {
+                      _resetSwipe();
+                      _startEditing();
+                    },
+                    child: Container(
+                      width: actionWidth / 2,
+                      color: AppColors.primaryContainer,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(LucideIcons.pencil, color: AppColors.onPrimaryContainer, size: 22),
+                          const SizedBox(height: 4),
+                          Text(
+                            '修改',
+                            style: TextStyle(
+                              color: AppColors.onPrimaryContainer,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                // 删除按钮
-                GestureDetector(
-                  onTap: () {
-                    _resetSwipe();
-                    widget.onDelete?.call();
-                  },
-                  child: Container(
-                    width: actionWidth / 2,
-                    color: AppColors.errorContainer,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(LucideIcons.trash2, color: AppColors.onErrorContainer, size: 22),
-                        const SizedBox(height: 4),
-                        Text(
-                          '删除',
-                          style: TextStyle(
-                            color: AppColors.onErrorContainer,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                  // 删除按钮
+                  GestureDetector(
+                    onTap: () {
+                      _resetSwipe();
+                      widget.onDelete?.call();
+                    },
+                    child: Container(
+                      width: actionWidth / 2,
+                      color: AppColors.errorContainer,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.trash2, color: AppColors.onErrorContainer, size: 22),
+                          const SizedBox(height: 4),
+                          Text(
+                            '删除',
+                            style: TextStyle(
+                              color: AppColors.onErrorContainer,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
 
         // 上层内容（可滑动）
         GestureDetector(
