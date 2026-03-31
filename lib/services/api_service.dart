@@ -404,7 +404,9 @@ class BooksApi {
     required String en,
     String zh = '',
   }) async {
-    return _client.post('/books/$bookId/pages/$pageNumber/sentences', auth: true, body: {
+    final path = '/books/$bookId/pages/$pageNumber/sentences';
+    _log('createSentence请求', {'path': path, 'en': en, 'zh': zh});
+    return _client.post(path, auth: true, body: {
       'en': en,
       'zh': zh,
     });
