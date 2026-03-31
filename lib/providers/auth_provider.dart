@@ -188,6 +188,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(user: user);
   }
 
+  /// Refresh user profile from server
+  Future<void> refreshProfile() async {
+    try {
+      final response = await authApi.getCurrentUser();
+      final user = UserProfile.fromJson(response);
+      state = state.copyWith(user: user);
+      debugPrint('[refreshProfile] 用户信息已刷新: ${user.name}');
+    } catch (e) {
+      debugPrint('[refreshProfile] 刷新失败: $e');
+    }
+  }
+
   /// Clear error
   void clearError() {
     state = state.copyWith(error: null);

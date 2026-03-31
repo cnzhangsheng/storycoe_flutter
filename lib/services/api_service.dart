@@ -455,6 +455,34 @@ class UsersApi {
     return _client.put('/users/me', auth: true, body: body);
   }
 
+  /// Upload avatar
+  Future<Map<String, dynamic>> uploadAvatar({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/users/avatar');
+    final request = http.MultipartRequest('POST', uri);
+
+    // Add authorization header
+    final token = await _client._getToken();
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    // Add avatar file
+    final file = http.MultipartFile.fromBytes(
+      'avatar',
+      bytes,
+      filename: filename,
+    );
+    request.files.add(file);
+
+    final streamedResponse = await _client.httpClient.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+
+    return _client._handleResponse(response);
+  }
+
   /// Get user settings
   Future<Map<String, dynamic>> getSettings() async {
     return _client.get('/users/settings', auth: true);

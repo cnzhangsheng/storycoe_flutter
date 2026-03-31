@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:storybird_flutter/core/theme/app_colors.dart';
 import 'package:storybird_flutter/core/theme/app_theme.dart';
 import 'package:storybird_flutter/providers/auth_provider.dart';
 import 'package:storybird_flutter/providers/user_settings_provider.dart';
+import 'package:storybird_flutter/services/api_service.dart';
 import 'package:storybird_flutter/widgets/common/app_image.dart';
 import 'package:storybird_flutter/widgets/common/bottom_nav.dart';
 
@@ -171,111 +173,161 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Column(
         children: [
           // 头像区域 - 可爱的圆角设计
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // 头像外框 - 彩虹边框效果
-              Container(
-                width: 120,
-                height: 120,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primaryContainer,
-                      AppColors.secondaryContainer,
-                      AppColors.tertiaryContainer,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(36),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryContainer.withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Container(
+          GestureDetector(
+            onTap: () => _showAvatarOptions(user),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // 头像外框 - 彩虹边框效果
+                Container(
+                  width: 120,
+                  height: 120,
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(28),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primaryContainer,
+                        AppColors.secondaryContainer,
+                        AppColors.tertiaryContainer,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(36),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryContainer.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: AppImage(
-                      image: user?.avatar ?? '',
-                      fit: BoxFit.cover,
-                      errorWidget: Container(
-                        color: AppColors.surfaceContainerHigh,
-                        child: Center(
-                          child: Icon(
-                            LucideIcons.smile,
-                            size: 48,
-                            color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: Stack(
+                        children: [
+                          AppImage(
+                            image: user?.avatar ?? '',
+                            fit: BoxFit.cover,
+                            errorWidget: Container(
+                              color: AppColors.surfaceContainerHigh,
+                              child: Center(
+                                child: Icon(
+                                  LucideIcons.smile,
+                                  size: 48,
+                                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
                           ),
+                          // 编辑图标覆盖层
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              color: Colors.black.withValues(alpha: 0.5),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    LucideIcons.camera,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '更换',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 等级徽章 - 星星装饰
+                Positioned(
+                  bottom: -8,
+                  right: -8,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.secondaryContainer,
+                          AppColors.secondaryContainer.withValues(alpha: 0.7),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.secondaryContainer.withValues(alpha: 0.5),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Lv.${user?.level ?? 3}',
+                        style: const TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.onSecondaryContainer,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-
-              // 等级徽章 - 星星装饰
-              Positioned(
-                bottom: -8,
-                right: -8,
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.secondaryContainer,
-                        AppColors.secondaryContainer.withValues(alpha: 0.7),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.secondaryContainer.withValues(alpha: 0.5),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Lv.${user?.level ?? 3}',
-                      style: const TextStyle(
-                        fontFamily: 'PlusJakartaSans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 20),
 
-          // 用户名称 - 大字体儿童风格
-          Text(
-            user?.name ?? 'Lily 小象',
-            style: const TextStyle(
-              fontFamily: 'PlusJakartaSans',
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              color: AppColors.onPrimaryFixed,
-              letterSpacing: 1,
+          // 用户名称 - 大字体儿童风格，点击可编辑
+          GestureDetector(
+            onTap: () => _showEditNameDialog(user),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  user?.name ?? 'Lily 小象',
+                  style: const TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.onPrimaryFixed,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  LucideIcons.pencil,
+                  size: 18,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+              ],
             ),
           ),
 
@@ -651,6 +703,273 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  /// ========================================
+  /// 显示头像操作选项
+  /// ========================================
+  void _showAvatarOptions(dynamic user) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '更换头像',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildAvatarOption(
+                      icon: LucideIcons.camera,
+                      label: '拍照',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickAndUploadAvatar(ImageSource.camera);
+                      },
+                    ),
+                    _buildAvatarOption(
+                      icon: LucideIcons.image,
+                      label: '相册',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickAndUploadAvatar(ImageSource.gallery);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAvatarOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.primaryContainer.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              icon,
+              size: 28,
+              color: AppColors.primaryContainer,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ========================================
+  /// 选择并上传头像
+  /// ========================================
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+
+    if (pickedFile == null) return;
+
+    try {
+      // 显示加载提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在上传头像...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+
+      // 读取图片数据
+      final bytes = await pickedFile.readAsBytes();
+      final filename = pickedFile.name;
+
+      // 上传头像
+      final response = await usersApi.uploadAvatar(
+        filename: filename,
+        bytes: bytes,
+      );
+
+      // 更新本地状态
+      ref.read(authProvider.notifier).refreshProfile();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('头像更新成功'),
+            backgroundColor: AppColors.primaryContainer,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('上传头像失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('上传失败: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  /// ========================================
+  /// 显示编辑名字对话框
+  /// ========================================
+  void _showEditNameDialog(dynamic user) {
+    final controller = TextEditingController(text: user?.name ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryContainer.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  LucideIcons.user,
+                  color: AppColors.primaryContainer,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text('修改名字'),
+            ],
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 20,
+            decoration: InputDecoration(
+              hintText: '请输入新名字',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryContainer,
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newName = controller.text.trim();
+                if (newName.isEmpty) return;
+
+                Navigator.pop(context);
+                await _updateName(newName);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryContainer,
+                foregroundColor: AppColors.onPrimaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// ========================================
+  /// 更新用户名字
+  /// ========================================
+  Future<void> _updateName(String newName) async {
+    try {
+      await usersApi.updateProfile(name: newName);
+      ref.read(authProvider.notifier).refreshProfile();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('名字更新成功'),
+            backgroundColor: AppColors.primaryContainer,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('更新名字失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('更新失败: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 }
 
