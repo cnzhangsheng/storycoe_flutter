@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
 
 /// App text styles matching the original design
 class AppTextStyles {

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:photo_view/photo_view.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/providers/create_provider.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/providers/create_provider.dart';
 
 /// 图片预览页面
 /// 支持缩放、拖动查看绘本照片

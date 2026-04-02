@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# StoryBird Flutter APK 打包脚本
+# StoryCoe Flutter APK 打包脚本
 # 自动添加时间戳到APK文件名，并上传到Google云盘
 
 # 进入项目目录
@@ -11,10 +11,10 @@ TIMESTAMP=$(date +"%Y%m%d%H%M%S")
 
 # Google云盘配置
 RCLONE_REMOTE="googledrive"
-GDRIVE_FOLDER="StoryBird/APK"
+GDRIVE_FOLDER="StoryCoe/APK"
 
 echo "=========================================="
-echo "StoryBird Flutter APK 打包"
+echo "StoryCoe Flutter APK 打包"
 echo "时间: $(date)"
 echo "=========================================="
 
@@ -29,7 +29,7 @@ if [ $? -eq 0 ]; then
   ORIGINAL_APK="build/app/outputs/flutter-apk/app-release.apk"
 
   # 新的APK文件名（带时间戳）
-  NEW_APK="build/app/outputs/flutter-apk/storybird_${TIMESTAMP}.apk"
+  NEW_APK="build/app/outputs/flutter-apk/storycoe_${TIMESTAMP}.apk"
 
   # 重命名APK
   mv "$ORIGINAL_APK" "$NEW_APK"
@@ -41,7 +41,7 @@ if [ $? -eq 0 ]; then
   echo "=========================================="
   echo "✓ 打包成功！"
   echo "=========================================="
-  echo "文件名: storybird_${TIMESTAMP}.apk"
+  echo "文件名: storycoe_${TIMESTAMP}.apk"
   echo "文件大小: $SIZE"
   echo "完整路径: $(pwd)/$NEW_APK"
   echo "=========================================="
@@ -56,7 +56,7 @@ if [ $? -eq 0 ]; then
     echo "=========================================="
     echo "✓ 上传成功！"
     echo "=========================================="
-    echo "云盘路径: ${GDRIVE_FOLDER}/storybird_${TIMESTAMP}.apk"
+    echo "云盘路径: ${GDRIVE_FOLDER}/storycoe_${TIMESTAMP}.apk"
     echo "=========================================="
   else
     echo ""

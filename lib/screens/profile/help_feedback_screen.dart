@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
 
 /// ========================================
 /// 帮助与反馈页面
@@ -279,13 +279,13 @@ class _HelpFeedbackScreenState extends ConsumerState<HelpFeedbackScreen> {
           _buildContactItem(
             icon: LucideIcons.mail,
             title: '邮箱',
-            value: 'support@storybird.app',
+            value: 'support@storycoe.app',
           ),
           const Divider(height: 1),
           _buildContactItem(
             icon: LucideIcons.messageCircle,
             title: '微信',
-            value: 'StoryBirdSupport',
+            value: 'StoryCoeSupport',
           ),
           const Divider(height: 1),
           _buildContactItem(

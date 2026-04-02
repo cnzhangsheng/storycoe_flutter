@@ -1,4 +1,4 @@
-package com.storybird.storybird_flutter
+package com.storycoe.storycoe_flutter
 
 import android.content.Intent
 import android.os.Bundle
@@ -6,7 +6,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.storybird.tts/settings"
+    private val CHANNEL = "com.storycoe.tts/settings"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

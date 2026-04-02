@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/theme/app_theme.dart';
-import 'package:storybird_flutter/models/sentence.dart';
-import 'package:storybird_flutter/providers/reading_provider.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_theme.dart';
+import 'package:storycoe_flutter/models/sentence.dart';
+import 'package:storycoe_flutter/providers/reading_provider.dart';
 
 /// 句子项组件
 /// 显示英文句子和中文翻译，支持播放/暂停

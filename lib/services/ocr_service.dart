@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:storybird_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
 
 /// OCR 识别结果句子
 class OcrSentence {

@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/theme/app_theme.dart';
-import 'package:storybird_flutter/providers/auth_provider.dart';
-import 'package:storybird_flutter/providers/books_provider.dart';
-import 'package:storybird_flutter/providers/reading_provider.dart';
-import 'package:storybird_flutter/widgets/bookshelf/book_cover_item.dart';
-import 'package:storybird_flutter/widgets/common/app_image.dart';
-import 'package:storybird_flutter/widgets/common/bottom_nav.dart';
-import 'package:storybird_flutter/widgets/common/progress_bar.dart';
-import 'package:storybird_flutter/widgets/stat_card.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_theme.dart';
+import 'package:storycoe_flutter/providers/auth_provider.dart';
+import 'package:storycoe_flutter/providers/books_provider.dart';
+import 'package:storycoe_flutter/providers/reading_provider.dart';
+import 'package:storycoe_flutter/widgets/bookshelf/book_cover_item.dart';
+import 'package:storycoe_flutter/widgets/common/app_image.dart';
+import 'package:storycoe_flutter/widgets/common/bottom_nav.dart';
+import 'package:storycoe_flutter/widgets/common/progress_bar.dart';
+import 'package:storycoe_flutter/widgets/stat_card.dart';
 
 /// Home screen
 class HomeScreen extends ConsumerStatefulWidget {

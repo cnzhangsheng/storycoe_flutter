@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:storybird_flutter/models/user_profile.dart';
-import 'package:storybird_flutter/services/api_service.dart' show authApi, ApiException;
+import 'package:storycoe_flutter/models/user_profile.dart';
+import 'package:storycoe_flutter/services/api_service.dart' show authApi, ApiException;
 
 /// Auth state
 class AuthState {

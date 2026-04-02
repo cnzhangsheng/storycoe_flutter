@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/theme/app_theme.dart';
-import 'package:storybird_flutter/models/book.dart';
-import 'package:storybird_flutter/widgets/common/app_image.dart';
-import 'package:storybird_flutter/widgets/common/progress_bar.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_theme.dart';
+import 'package:storycoe_flutter/models/book.dart';
+import 'package:storycoe_flutter/widgets/common/app_image.dart';
+import 'package:storycoe_flutter/widgets/common/progress_bar.dart';
 
 /// Book card widget for displaying in the bookshelf
 class BookCard extends StatelessWidget {

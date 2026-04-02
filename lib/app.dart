@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:storybird_flutter/core/router/app_router.dart';
-import 'package:storybird_flutter/core/theme/app_theme.dart';
-import 'package:storybird_flutter/providers/auth_provider.dart';
+import 'package:storycoe_flutter/core/router/app_router.dart';
+import 'package:storycoe_flutter/core/theme/app_theme.dart';
+import 'package:storycoe_flutter/providers/auth_provider.dart';
 
 /// Main application widget
-class StoryBirdApp extends ConsumerStatefulWidget {
-  const StoryBirdApp({super.key});
+class StoryCoeApp extends ConsumerStatefulWidget {
+  const StoryCoeApp({super.key});
 
   @override
-  ConsumerState<StoryBirdApp> createState() => _StoryBirdAppState();
+  ConsumerState<StoryCoeApp> createState() => _StoryCoeAppState();
 }
 
-class _StoryBirdAppState extends ConsumerState<StoryBirdApp> {
+class _StoryCoeAppState extends ConsumerState<StoryCoeApp> {
   bool _isInitialized = false;
 
   @override
@@ -25,9 +25,9 @@ class _StoryBirdAppState extends ConsumerState<StoryBirdApp> {
   Future<void> _autoLogin() async {
     final isLoggedIn = ref.read(authProvider).isLoggedIn;
     if (!isLoggedIn) {
-      debugPrint('[StoryBirdApp] 自动登录中...');
+      debugPrint('[StoryCoeApp] 自动登录中...');
       await ref.read(authProvider.notifier).devLogin();
-      debugPrint('[StoryBirdApp] 自动登录完成');
+      debugPrint('[StoryCoeApp] 自动登录完成');
     }
     if (mounted) {
       setState(() {
@@ -43,7 +43,7 @@ class _StoryBirdAppState extends ConsumerState<StoryBirdApp> {
     // 显示启动画面直到登录完成
     if (!_isInitialized) {
       return MaterialApp(
-        title: 'StoryBird',
+        title: 'StoryCoe',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const Scaffold(
@@ -55,7 +55,7 @@ class _StoryBirdAppState extends ConsumerState<StoryBirdApp> {
     }
 
     return MaterialApp.router(
-      title: 'StoryBird',
+      title: 'StoryCoe',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,

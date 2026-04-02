@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:storybird_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
 
 /// A universal image widget that handles both local assets and network images
 class AppImage extends StatelessWidget {

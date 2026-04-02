@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   // App info
-  static const String appName = 'StoryBird';
+  static const String appName = 'StoryCoe';
   static const String appVersion = '1.0.0';
 
   // Animation durations

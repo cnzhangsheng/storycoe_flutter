@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:storybird_flutter/models/sentence.dart';
-import 'package:storybird_flutter/services/api_service.dart';
-import 'package:storybird_flutter/providers/books_provider.dart';
+import 'package:storycoe_flutter/models/sentence.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/providers/books_provider.dart';
 
 /// 日志工具
 void _log(String message, [dynamic data]) {

@@ -6,9 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/providers/create_provider.dart';
-import 'package:storybird_flutter/widgets/common/bottom_nav.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/providers/create_provider.dart';
+import 'package:storycoe_flutter/widgets/common/bottom_nav.dart';
 
 /// 创作页面
 /// 支持绘本照片上传、拖动排序、生成朗读绘本

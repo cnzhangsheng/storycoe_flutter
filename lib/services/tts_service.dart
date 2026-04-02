@@ -109,7 +109,7 @@ class TtsService {
     try {
       _log('尝试打开 TTS 设置...');
       // 使用 MethodChannel 调用原生代码打开设置
-      const platform = MethodChannel('com.storybird.tts/settings');
+      const platform = MethodChannel('com.storycoe.tts/settings');
       await platform.invokeMethod('openTtsSettings');
       _log('已调用打开 TTS 设置');
     } on PlatformException catch (e) {

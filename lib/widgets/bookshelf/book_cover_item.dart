@@ -2,10 +2,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/utils/bookshelf_sizer.dart';
-import 'package:storybird_flutter/models/book.dart';
-import 'package:storybird_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/utils/bookshelf_sizer.dart';
+import 'package:storycoe_flutter/models/book.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
 
 /// ========================================
 /// 绘本封面组件

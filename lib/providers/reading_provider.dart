@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:storybird_flutter/models/book.dart';
-import 'package:storybird_flutter/models/sentence.dart';
-import 'package:storybird_flutter/services/api_service.dart';
-import 'package:storybird_flutter/services/tts_service.dart';
+import 'package:storycoe_flutter/models/book.dart';
+import 'package:storycoe_flutter/models/sentence.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/services/tts_service.dart';
 
 /// ========================================
 /// 阅读页面状态

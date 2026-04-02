@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/theme/app_theme.dart';
-import 'package:storybird_flutter/providers/auth_provider.dart';
-import 'package:storybird_flutter/providers/user_settings_provider.dart';
-import 'package:storybird_flutter/services/api_service.dart';
-import 'package:storybird_flutter/widgets/common/app_image.dart';
-import 'package:storybird_flutter/widgets/common/bottom_nav.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_theme.dart';
+import 'package:storycoe_flutter/providers/auth_provider.dart';
+import 'package:storycoe_flutter/providers/user_settings_provider.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/widgets/common/app_image.dart';
+import 'package:storycoe_flutter/widgets/common/bottom_nav.dart';
 
 /// ========================================
 /// 我的页面 - 儿童化设计

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/providers/auth_provider.dart'
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/providers/auth_provider.dart'
     show
         authProvider,
         authErrorProvider,
@@ -226,7 +226,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       // App name
                       const Text(
-                        'StoryBird',
+                        'StoryCoe',
                         style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
                           fontSize: 36,

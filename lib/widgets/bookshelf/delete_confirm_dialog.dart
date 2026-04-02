@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
 
 /// ========================================
 /// 删除确认弹窗 - 儿童化设计

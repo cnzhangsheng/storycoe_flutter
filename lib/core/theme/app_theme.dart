@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/core/theme/app_text_styles.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/core/theme/app_text_styles.dart';
 
 /// App theme configuration
 class AppTheme {

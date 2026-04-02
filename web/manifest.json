@@ -1,6 +1,6 @@
 {
-    "name": "storybird_flutter",
-    "short_name": "storybird_flutter",
+    "name": "StoryCoe",
+    "short_name": "StoryCoe",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:storybird_flutter/models/book.dart';
-import 'package:storybird_flutter/services/api_service.dart';
+import 'package:storycoe_flutter/models/book.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:uuid/uuid.dart';
 
 /// 日志工具

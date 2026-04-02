@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:storybird_flutter/providers/auth_provider.dart';
-import 'package:storybird_flutter/screens/create/create_screen.dart';
-import 'package:storybird_flutter/screens/create/generate_progress_screen.dart';
-import 'package:storybird_flutter/screens/create/image_preview_screen.dart';
-import 'package:storybird_flutter/screens/home/home_screen.dart';
-import 'package:storybird_flutter/screens/login/login_screen.dart';
-import 'package:storybird_flutter/screens/profile/profile_screen.dart';
-import 'package:storybird_flutter/screens/profile/parental_control_screen.dart';
-import 'package:storybird_flutter/screens/profile/help_feedback_screen.dart';
-import 'package:storybird_flutter/screens/reading/reading_screen.dart';
-import 'package:storybird_flutter/providers/create_provider.dart';
+import 'package:storycoe_flutter/providers/auth_provider.dart';
+import 'package:storycoe_flutter/screens/create/create_screen.dart';
+import 'package:storycoe_flutter/screens/create/generate_progress_screen.dart';
+import 'package:storycoe_flutter/screens/create/image_preview_screen.dart';
+import 'package:storycoe_flutter/screens/home/home_screen.dart';
+import 'package:storycoe_flutter/screens/login/login_screen.dart';
+import 'package:storycoe_flutter/screens/profile/profile_screen.dart';
+import 'package:storycoe_flutter/screens/profile/parental_control_screen.dart';
+import 'package:storycoe_flutter/screens/profile/help_feedback_screen.dart';
+import 'package:storycoe_flutter/screens/reading/reading_screen.dart';
+import 'package:storycoe_flutter/providers/create_provider.dart';
 
 /// App router configuration
 final routerProvider = Provider<GoRouter>((ref) {

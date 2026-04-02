@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:storybird_flutter/core/theme/app_colors.dart';
-import 'package:storybird_flutter/models/sentence.dart';
-import 'package:storybird_flutter/providers/reading_provider.dart';
-import 'package:storybird_flutter/services/tts_service.dart';
+import 'package:storycoe_flutter/core/theme/app_colors.dart';
+import 'package:storycoe_flutter/models/sentence.dart';
+import 'package:storycoe_flutter/providers/reading_provider.dart';
+import 'package:storycoe_flutter/services/tts_service.dart';
 
 /// ========================================
 /// 句子朗读状态枚举
