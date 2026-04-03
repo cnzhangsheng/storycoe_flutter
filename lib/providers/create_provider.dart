@@ -79,7 +79,7 @@ class CreateState {
     this.coverImage,
     this.images = const [],
     this.currentImageIndex = 0,
-    this.title = '我的绘本',
+    this.title = '',
     this.isGenerating = false,
     this.generateProgress = const GenerateProgress(),
     this.error,
@@ -186,9 +186,12 @@ class CreateNotifier extends StateNotifier<CreateState> {
     }
   }
 
-  /// 清空所有图片（包括封面）
+  /// 清空图片（保留封面）
   void clearImages() {
-    state = const CreateState();
+    state = state.copyWith(
+      images: [],
+      currentImageIndex: 0,
+    );
   }
 
   /// 设置绘本标题
@@ -312,7 +315,7 @@ class CreateNotifier extends StateNotifier<CreateState> {
         // 清空图片数据和标题，准备下次创作
         clearCover: true,
         images: [],
-        title: '我的绘本',
+        title: '',
       );
 
       // 刷新书籍列表

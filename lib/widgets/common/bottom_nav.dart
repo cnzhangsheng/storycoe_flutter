@@ -15,17 +15,6 @@ class BottomNav extends ConsumerWidget {
     required this.currentLocation,
   });
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature 功能开发中，敬请期待'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isGenerating = ref.watch(isGeneratingProvider);
@@ -61,7 +50,7 @@ class BottomNav extends ConsumerWidget {
                 icon: LucideIcons.compass,
                 label: '探索',
                 isSelected: currentLocation == '/explore',
-                onTap: () => _showComingSoon(context, '探索'),
+                onTap: () => context.go('/explore'),
               ),
               _NavItem(
                 icon: LucideIcons.edit3,

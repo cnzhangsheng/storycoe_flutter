@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:storycoe_flutter/providers/auth_provider.dart';
+import 'package:storycoe_flutter/screens/explore/explore_screen.dart';
 import 'package:storycoe_flutter/screens/create/create_screen.dart';
 import 'package:storycoe_flutter/screens/create/generate_progress_screen.dart';
 import 'package:storycoe_flutter/screens/create/image_preview_screen.dart';
@@ -44,6 +45,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/home',
         name: 'home',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/explore',
+        name: 'explore',
+        builder: (context, state) => const ExploreScreen(),
       ),
       GoRoute(
         path: '/create',

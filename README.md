@@ -1,17 +1,32 @@
-# storybird_flutter
+# Storycoe - 绘本创
 
-A new Flutter project.
+**自己做绘本，逐句跟读练口语**
 
-## Getting Started
+## 简介
 
-This project is a starting point for a Flutter application.
+Storycoe（绘本创）是一款专为儿童设计的绘本阅读与创作应用。用户可以通过上传照片生成个性化绘本，并逐句跟读练习口语。
 
-A few resources to get you started if this is your first Flutter project:
+## 功能特性
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- 📚 **绘本创作**：上传照片，自动生成绘本内容
+- 🎯 **逐句跟读**：逐句朗读练习口语发音
+- 🔊 **语音朗读**：支持多种语音风格朗读
+- 📖 **绘本探索**：发现更多精选绘本
+- 👤 **个人中心**：管理个人绘本和设置
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 技术栈
+
+- **前端**：Flutter 3.x + Riverpod + GoRouter
+- **后端**：Python FastAPI + PostgreSQL
+- **AI**：Google Gemini AI
+
+## 项目结构
+
+```
+storycoe_flutter/    # Flutter 前端应用
+storycoe_backend/    # FastAPI 后端服务
+```
+
+## 开发指南
+
+详见 [CLAUDE.md](./CLAUDE.md)

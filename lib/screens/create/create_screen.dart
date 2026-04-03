@@ -130,14 +130,18 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   /// 启动生成并跳转到进度页面
   void _startGenerateAndNavigate() {
-    final title = _titleController.text.trim().isEmpty
-        ? '我的绘本'
-        : _titleController.text.trim();
+    final title = _titleController.text.trim();
 
     // 先检查图片
     final images = ref.read(selectedImagesProvider);
     if (images.isEmpty) {
       _showErrorSnackBar('请先上传照片');
+      return;
+    }
+
+    // 检查标题
+    if (title.isEmpty) {
+      _showErrorSnackBar('请输入绘本名称');
       return;
     }
 
@@ -629,6 +633,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 /// ========================================
 /// 可拖拽排序的图片网格组件
 /// 使用 Flutter 原生的 LongPressDraggable 实现
+/// 支持拖动时放大、阴影加深、其他照片避让
 /// ========================================
 class _DraggableImageGrid extends StatefulWidget {
   final List<SelectedImage> images;
@@ -645,8 +650,26 @@ class _DraggableImageGrid extends StatefulWidget {
   State<_DraggableImageGrid> createState() => _DraggableImageGridState();
 }
 
-class _DraggableImageGridState extends State<_DraggableImageGrid> {
+class _DraggableImageGridState extends State<_DraggableImageGrid>
+    with TickerProviderStateMixin {
   int? _draggingIndex;
+  int? _hoveringIndex;
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -657,6 +680,8 @@ class _DraggableImageGridState extends State<_DraggableImageGrid> {
         final index = entry.key;
         final image = entry.value;
         final isDragging = _draggingIndex == index;
+        final isHovering = _hoveringIndex == index;
+        final isOther = _draggingIndex != null && _draggingIndex != index;
 
         return LongPressDraggable<int>(
           data: index,
@@ -664,24 +689,28 @@ class _DraggableImageGridState extends State<_DraggableImageGrid> {
             setState(() {
               _draggingIndex = index;
             });
+            _animationController.forward();
           },
           onDragEnd: (_) {
             setState(() {
               _draggingIndex = null;
+              _hoveringIndex = null;
             });
+            _animationController.reverse();
           },
-          feedback: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(12),
-            child: _buildImageItem(image, index, isDragging: true),
-          ),
-          childWhenDragging: Opacity(
-            opacity: 0.3,
-            child: _buildImageItem(image, index, isDragging: true),
-          ),
+          feedback: _buildDraggingFeedback(image, index),
+          childWhenDragging: _buildPlaceholder(index),
           child: DragTarget<int>(
             onWillAcceptWithDetails: (details) {
+              setState(() {
+                _hoveringIndex = index;
+              });
               return details.data != index;
+            },
+            onLeave: (_) {
+              setState(() {
+                _hoveringIndex = null;
+              });
             },
             onAcceptWithDetails: (details) {
               final fromIndex = details.data;
@@ -690,10 +719,11 @@ class _DraggableImageGridState extends State<_DraggableImageGrid> {
               }
             },
             builder: (context, candidateData, rejectedData) {
-              final isHovering = candidateData.isNotEmpty;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                transform: isHovering ? Matrix4.diagonal3Values(1.05, 1.05, 1.0) : Matrix4.identity(),
+                curve: Curves.easeOutCubic,
+                transform: _calculateTransform(isDragging, isHovering, isOther),
+                transformAlignment: Alignment.center,
                 child: _buildImageItem(image, index, isDragging: isDragging),
               );
             },
@@ -703,21 +733,130 @@ class _DraggableImageGridState extends State<_DraggableImageGrid> {
     );
   }
 
-  Widget _buildImageItem(SelectedImage image, int index, {bool isDragging = false}) {
+  /// 计算变换矩阵
+  Matrix4 _calculateTransform(bool isDragging, bool isHovering, bool isOther) {
+    if (isDragging) {
+      return Matrix4.diagonal3Values(0.9, 0.9, 1.0);
+    }
+    if (isHovering) {
+      return Matrix4.diagonal3Values(1.08, 1.08, 1.0);
+    }
+    if (isOther) {
+      return Matrix4.diagonal3Values(0.95, 0.95, 1.0);
+    }
+    return Matrix4.identity();
+  }
+
+  /// 拖动时的浮动反馈（放大 + 阴影加深）
+  Widget _buildDraggingFeedback(SelectedImage image, int index) {
+    final itemSize = (MediaQuery.of(context).size.width - 48 - 24) / 3;
+    return Material(
+      color: Colors.transparent,
+      child: Transform.scale(
+        scale: 1.15,
+        child: Container(
+          width: itemSize,
+          height: itemSize,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.tertiaryContainer,
+              width: 4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.tertiaryContainer.withValues(alpha: 0.5),
+                blurRadius: 24,
+                spreadRadius: 4,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                kIsWeb
+                    ? Image.memory(image.bytes!, fit: BoxFit.cover)
+                    : Image.file(File(image.path), fit: BoxFit.cover),
+                // 页码标签
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '第${index + 1}页',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 原位置的占位符（缩小 + 半透明）
+  Widget _buildPlaceholder(int index) {
+    final itemSize = (MediaQuery.of(context).size.width - 48 - 24) / 3;
     return Container(
-      width: (MediaQuery.of(context).size.width - 48 - 24) / 3, // 减去 padding 和间距
-      height: (MediaQuery.of(context).size.width - 48 - 24) / 3,
+      width: itemSize,
+      height: itemSize,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.tertiaryContainer.withValues(alpha: 0.5),
+          width: 2,
+          style: BorderStyle.solid,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          '第${index + 1}页',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageItem(SelectedImage image, int index, {bool isDragging = false}) {
+    final itemSize = (MediaQuery.of(context).size.width - 48 - 24) / 3;
+    return Container(
+      width: itemSize,
+      height: itemSize,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDragging ? AppColors.tertiaryContainer : Colors.white,
-          width: isDragging ? 3 : 2,
+          color: Colors.white,
+          width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDragging ? 0.2 : 0.1),
+            blurRadius: isDragging ? 16 : 8,
+            offset: Offset(0, isDragging ? 6 : 2),
           ),
         ],
       ),
