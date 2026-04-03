@@ -211,12 +211,12 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           children: [
             _buildHeader(),
             const SizedBox(height: 32),
-            _buildTitleInput(),
+            // 第一行：绘本封面（缩小）+ 绘本名称
+            _buildCoverAndTitleRow(coverImage),
             const SizedBox(height: 24),
-            _buildCoverUpload(coverImage),
+            // 第二行：绘本内容上传
+            _buildContentUpload(),
             const SizedBox(height: 24),
-            if (images.isEmpty) _buildUploadButtons(),
-            SizedBox(height: images.isEmpty ? 0 : 16),
             if (images.isNotEmpty) _buildImageGrid(images),
             const SizedBox(height: 24),
             if (images.isNotEmpty) _buildTipsCard(),
@@ -255,56 +255,147 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     );
   }
 
-  Widget _buildTitleInput() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '绘本名称',
-            style: TextStyle(
-              fontFamily: 'BeVietnamPro',
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.onSurfaceVariant,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _titleController,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              hintText: '给你的书起个好听的名字...',
-              filled: true,
-              fillColor: AppColors.surfaceContainerLow,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+  /// 第一行：绘本封面（缩小）+ 绘本名称
+  Widget _buildCoverAndTitleRow(SelectedImage? coverImage) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 绘本封面（缩小版）
+        GestureDetector(
+          onTap: _pickCoverImage,
+          child: Container(
+            width: 80,
+            height: 107, // 3:4 比例
+            decoration: BoxDecoration(
+              color: coverImage == null
+                  ? AppColors.surfaceContainerLow
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: coverImage == null
+                    ? AppColors.tertiaryContainer.withValues(alpha: 0.3)
+                    : Colors.white,
+                width: 2,
               ),
+              boxShadow: coverImage != null
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: coverImage == null
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        LucideIcons.imagePlus,
+                        size: 24,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '封面',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  )
+                : Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: kIsWeb
+                            ? Image.memory(coverImage.bytes!, fit: BoxFit.cover)
+                            : Image.file(File(coverImage.path), fit: BoxFit.cover),
+                      ),
+                      Positioned(
+                        right: 4,
+                        top: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            ref.read(createProvider.notifier).removeCoverImage();
+                          },
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(LucideIcons.x, size: 12, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+
+        const SizedBox(width: 16),
+
+        // 绘本名称输入（扩展填充剩余空间）
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '绘本名称',
+                  style: TextStyle(
+                    fontFamily: 'BeVietnamPro',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurfaceVariant,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _titleController,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '给你的书起个好听的名字...',
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerLow,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCoverUpload(SelectedImage? coverImage) {
+  /// 绘本内容上传（样式与绘本名称一致）
+  Widget _buildContentUpload() {
+    final images = ref.watch(selectedImagesProvider);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -325,7 +416,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '绘本封面',
+                '绘本内容',
                 style: TextStyle(
                   fontFamily: 'BeVietnamPro',
                   fontSize: 12,
@@ -334,158 +425,62 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   letterSpacing: 1,
                 ),
               ),
-              Text(
-                '可选',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+              if (images.isNotEmpty)
+                Text(
+                  '${images.length} 张',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-          if (coverImage == null)
-            GestureDetector(
-              onTap: _pickCoverImage,
-              child: AspectRatio(
-                aspectRatio: 3 / 4,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        LucideIcons.imagePlus,
-                        size: 40,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '点击上传封面',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+          GestureDetector(
+            onTap: _pickImages,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
+                  width: 1,
                 ),
               ),
-            )
-          else
-            AspectRatio(
-              aspectRatio: 3 / 4,
-              child: Stack(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: kIsWeb
-                          ? Image.memory(coverImage.bytes!, fit: BoxFit.cover)
-                          : Image.file(File(coverImage.path), fit: BoxFit.cover),
-                    ),
+                  Icon(
+                    LucideIcons.imagePlus,
+                    size: 20,
+                    color: AppColors.onSurfaceVariant,
                   ),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: GestureDetector(
-                      onTap: () {
-                        ref.read(createProvider.notifier).removeCoverImage();
-                      },
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(LucideIcons.x, size: 18, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.bookOpen, size: 14, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text('封面', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-                        ],
-                      ),
+                  const SizedBox(width: 8),
+                  Text(
+                    images.isEmpty ? '从相册上传绘本照片' : '继续添加照片',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUploadButtons() {
-    return GestureDetector(
-      onTap: _pickImages,
-      child: Container(
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.tertiaryContainer.withValues(alpha: 0.3),
-            width: 2,
           ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.tertiaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(LucideIcons.imagePlus, size: 32, color: Colors.white),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              '从相册上传',
-              style: TextStyle(
-                fontFamily: 'PlusJakartaSans',
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+          if (images.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '最多 $_maxImagesPerPick 张，支持拖动排序',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '选择绘本照片，最多 $_maxImagesPerPick 张',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -47,6 +47,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   final _newSentenceController = TextEditingController();
   bool _isSavingSentence = false;
 
+  /// 屏幕方向偏好：'portrait' | 'landscape' | 'auto'
+  String _orientationMode = 'auto';
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +90,13 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     _imageController.dispose();
     // 离开页面时停止阅读
     ref.read(readingProvider.notifier).stopReading();
+    // 恢复默认屏幕方向
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     super.dispose();
   }
 
@@ -334,6 +344,30 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
 
           const SizedBox(width: 8),
 
+          // 屏幕方向按钮
+          GestureDetector(
+            onTap: () => _showOrientationDialog(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                _orientationMode == 'portrait'
+                    ? LucideIcons.smartphone
+                    : _orientationMode == 'landscape'
+                        ? LucideIcons.tablet
+                        : LucideIcons.smartphoneNfc,
+                size: 20,
+                color: AppColors.primaryContainer,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
           // 更多按钮
           GestureDetector(
             onTap: () => _showReadingMenu(context),
@@ -503,6 +537,184 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
             child: const Text('复制日志'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 显示屏幕方向选择弹窗
+  void _showOrientationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(LucideIcons.smartphone, color: AppColors.primaryContainer),
+            const SizedBox(width: 8),
+            const Text('屏幕方向'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildOrientationOption(
+              icon: LucideIcons.smartphone,
+              label: '竖屏',
+              description: '锁定为竖屏显示',
+              value: 'portrait',
+            ),
+            const SizedBox(height: 8),
+            _buildOrientationOption(
+              icon: LucideIcons.tablet,
+              label: '横屏',
+              description: '锁定为横屏显示',
+              value: 'landscape',
+            ),
+            const SizedBox(height: 8),
+            _buildOrientationOption(
+              icon: LucideIcons.smartphoneNfc,
+              label: '自动',
+              description: '跟随设备方向自动切换',
+              value: 'auto',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建屏幕方向选项
+  Widget _buildOrientationOption({
+    required IconData icon,
+    required String label,
+    required String description,
+    required String value,
+  }) {
+    final isSelected = _orientationMode == value;
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context);
+        _setOrientation(value);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primaryContainer.withValues(alpha: 0.15)
+              : AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primaryContainer
+                : AppColors.surfaceContainerHigh,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primaryContainer.withValues(alpha: 0.2)
+                    : AppColors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? AppColors.primaryContainer
+                    : AppColors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected
+                          ? AppColors.primaryContainer
+                          : AppColors.onSurface,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                LucideIcons.check,
+                size: 20,
+                color: AppColors.primaryContainer,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 设置屏幕方向
+  void _setOrientation(String mode) {
+    setState(() {
+      _orientationMode = mode;
+    });
+
+    switch (mode) {
+      case 'portrait':
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+        break;
+      case 'landscape':
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        break;
+      case 'auto':
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        break;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          mode == 'portrait'
+              ? '已锁定为竖屏显示'
+              : mode == 'landscape'
+                  ? '已锁定为横屏显示'
+                  : '已切换为自动方向',
+        ),
+        backgroundColor: AppColors.primaryContainer,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }

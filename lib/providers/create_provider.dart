@@ -246,10 +246,22 @@ class CreateNotifier extends StateNotifier<CreateState> {
       final imageData = <(String, List<int>)>[];
       for (var i = 0; i < state.images.length; i++) {
         final image = state.images[i];
-        if (image.bytes != null) {
+        if (image.bytes != null && image.bytes!.isNotEmpty) {
           imageData.add(('page_${i + 1}.jpg', image.bytes!));
           _log('准备图片', {'index': i, 'name': 'page_${i + 1}.jpg', 'size': image.bytes!.length});
+        } else {
+          _log('警告: 图片 $i 数据为空');
         }
+      }
+
+      // 检查是否有有效图片
+      if (imageData.isEmpty) {
+        _log('错误: 没有有效的图片数据');
+        state = state.copyWith(
+          isGenerating: false,
+          error: '图片数据无效，请重新选择图片',
+        );
+        return null;
       }
 
       _log('调用 API', {'imageCount': imageData.length, 'hasCover': coverData != null});
