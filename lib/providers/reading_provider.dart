@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:storycoe_flutter/models/book.dart';
 import 'package:storycoe_flutter/models/sentence.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
@@ -45,6 +46,21 @@ class ReadingState {
   /// 错误信息
   final String? error;
 
+  /// 整页朗读：是否正在播放整页
+  final bool isPlayingAll;
+
+  /// 整页朗读：当前句子索引（-1 表示未开始）
+  final int playingAllIndex;
+
+  /// 整页朗读：是否暂停
+  final bool isPlayingAllPaused;
+
+  /// 当前播放的单词起始位置（用于单词级高亮）
+  final int currentWordStart;
+
+  /// 当前播放的单词结束位置
+  final int currentWordEnd;
+
   const ReadingState({
     this.bookDetail,
     this.currentBook,
@@ -58,6 +74,11 @@ class ReadingState {
     this.isPlaying = false,
     this.isLoading = false,
     this.error,
+    this.isPlayingAll = false,
+    this.playingAllIndex = -1,
+    this.isPlayingAllPaused = false,
+    this.currentWordStart = -1,
+    this.currentWordEnd = -1,
   });
 
   /// 总页数
@@ -137,9 +158,16 @@ class ReadingState {
     bool? isPlaying,
     bool? isLoading,
     String? error,
+    bool? isPlayingAll,
+    int? playingAllIndex,
+    bool? isPlayingAllPaused,
+    int? currentWordStart,
+    int? currentWordEnd,
     bool clearBookDetail = false,
     bool clearActiveSentence = false,
     bool clearError = false,
+    bool clearPlayingAll = false,
+    bool clearWordProgress = false,
   }) {
     return ReadingState(
       bookDetail: clearBookDetail ? null : (bookDetail ?? this.bookDetail),
@@ -154,6 +182,11 @@ class ReadingState {
       isPlaying: isPlaying ?? this.isPlaying,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
+      isPlayingAll: clearPlayingAll ? false : (isPlayingAll ?? this.isPlayingAll),
+      playingAllIndex: clearPlayingAll ? -1 : (playingAllIndex ?? this.playingAllIndex),
+      isPlayingAllPaused: clearPlayingAll ? false : (isPlayingAllPaused ?? this.isPlayingAllPaused),
+      currentWordStart: clearWordProgress ? -1 : (currentWordStart ?? this.currentWordStart),
+      currentWordEnd: clearWordProgress ? -1 : (currentWordEnd ?? this.currentWordEnd),
     );
   }
 }
@@ -169,6 +202,8 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         super(const ReadingState()) {
     // 使用新的回调机制，确保状态同步
     _ttsService.addStateCallback(_onTtsStateChanged);
+    // 添加进度回调（用于单词级高亮）
+    _ttsService.addProgressCallback(_onTtsProgress);
     // 加载用户设置
     _loadUserSettings();
   }
@@ -215,13 +250,50 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     debugPrint('[ReadingNotifier] TTS 状态变化: ${_ttsService.state}');
     // 当 TTS 变为 idle 状态时，更新 isPlaying 为 false
     if (_ttsService.state == TtsState.idle && state.isPlaying) {
-      debugPrint('[ReadingNotifier] TTS 播放完成，更新 isPlaying = false');
+      debugPrint('[ReadingNotifier] TTS 播放完成');
+
+      // 清除单词进度
+      state = state.copyWith(clearWordProgress: true);
+
+      // 整页朗读模式：自动播放下一个句子
+      if (state.isPlayingAll && !state.isPlayingAllPaused) {
+        final nextIndex = state.playingAllIndex + 1;
+        final sentences = state.currentSentences;
+
+        if (nextIndex < sentences.length) {
+          // 还有下一个句子
+          debugPrint('[ReadingNotifier] 整页朗读下一个句子: $nextIndex');
+          _playSentenceInSequence(nextIndex);
+        } else {
+          // 所有句子播放完成
+          debugPrint('[ReadingNotifier] 整页朗读完成');
+          state = state.copyWith(
+            isPlayingAll: false,
+            playingAllIndex: -1,
+            isPlaying: false,
+          );
+        }
+        return;
+      }
+
+      // 普通播放完成
       state = state.copyWith(isPlaying: false);
 
       // 循环播放：自动播放下一个句子
       if (state.loopEnabled) {
         _playNextSentence();
       }
+    }
+  }
+
+  /// TTS 进度回调（单词级高亮）
+  void _onTtsProgress(TtsProgress progress) {
+    // 只在播放状态时更新进度
+    if (state.isPlaying && state.activeSentenceId != null) {
+      state = state.copyWith(
+        currentWordStart: progress.start,
+        currentWordEnd: progress.end,
+      );
     }
   }
 
@@ -276,12 +348,32 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       );
       debugPrint('[startReading] 状态更新: totalPages=${state.totalPages}');
 
-      // 加载第一页内容
-      debugPrint('[startReading] 开始加载第一页...');
-      await _loadPage(0);
-      debugPrint('[startReading] 第一页加载完成, loadedPages=${state.loadedPages.length}');
+      // 尝试恢复本地保存的进度
+      final savedPage = await _restoreProgressLocally(book.id);
+      int startPage = 0;
+      if (savedPage != null && savedPage >= 0 && savedPage < bookDetail.totalPages) {
+        startPage = savedPage;
+        debugPrint('[startReading] 从本地恢复进度: 第${startPage + 1}页');
+      }
 
-      debugPrint('[startReading] 开始阅读完成: ${book.title}, 总页数: ${state.totalPages}');
+      // 加载起始页内容
+      debugPrint('[startReading] 开始加载第${startPage + 1}页...');
+      await _loadPage(startPage);
+      debugPrint('[startReading] 页面加载完成, loadedPages=${state.loadedPages.length}');
+
+      // 设置当前页
+      if (startPage > 0) {
+        final sentences = state.loadedPages[startPage]?.sentences ?? [];
+        state = state.copyWith(
+          currentPage: startPage,
+          activeSentenceId: sentences.isNotEmpty ? sentences.first.id : null,
+        );
+      }
+
+      // 预加载相邻页面
+      _preloadAdjacentPages(startPage);
+
+      debugPrint('[startReading] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
     } catch (e) {
       debugPrint('[startReading] 加载绘本失败: $e');
       state = state.copyWith(
@@ -332,9 +424,31 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         isLoading: false,
       );
 
-      // 加载第一页内容
-      await _loadPage(0);
-      debugPrint('[startReadingById] 开始阅读完成: ${book.title}, 总页数: ${state.totalPages}');
+      // 尝试恢复本地保存的进度
+      final savedPage = await _restoreProgressLocally(bookId);
+      int startPage = 0;
+      if (savedPage != null && savedPage >= 0 && savedPage < bookDetail.totalPages) {
+        startPage = savedPage;
+        debugPrint('[startReadingById] 从本地恢复进度: 第${startPage + 1}页');
+      }
+
+      // 加载起始页内容
+      await _loadPage(startPage);
+      debugPrint('[startReadingById] 页面加载完成');
+
+      // 设置当前页
+      if (startPage > 0) {
+        final sentences = state.loadedPages[startPage]?.sentences ?? [];
+        state = state.copyWith(
+          currentPage: startPage,
+          activeSentenceId: sentences.isNotEmpty ? sentences.first.id : null,
+        );
+      }
+
+      // 预加载相邻页面
+      _preloadAdjacentPages(startPage);
+
+      debugPrint('[startReadingById] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
     } catch (e) {
       debugPrint('[startReadingById] 加载绘本失败: $e');
       state = state.copyWith(
@@ -409,8 +523,8 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       return;
     }
 
-    // 停止当前播放
-    await stopPlaying();
+    // 停止当前播放（包括整页朗读）
+    await stopAllSentences();
 
     // 加载目标页
     debugPrint('[goToPage] 开始加载页面...');
@@ -427,9 +541,29 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
     // 同步阅读进度到后端
     await _syncProgress(pageIndex);
+
+    // 预加载相邻页面
+    _preloadAdjacentPages(pageIndex);
   }
 
-  /// 同步阅读进度
+  /// 预加载相邻页面数据
+  void _preloadAdjacentPages(int currentPage) {
+    final totalPages = state.totalPages;
+
+    // 前一页
+    if (currentPage > 0 && !state.loadedPages.containsKey(currentPage - 1)) {
+      debugPrint('[_preloadAdjacentPages] 预加载前一页: ${currentPage - 1}');
+      _loadPage(currentPage - 1);
+    }
+
+    // 后一页
+    if (currentPage < totalPages - 1 && !state.loadedPages.containsKey(currentPage + 1)) {
+      debugPrint('[_preloadAdjacentPages] 预加载后一页: ${currentPage + 1}');
+      _loadPage(currentPage + 1);
+    }
+  }
+
+  /// 同步阅读进度（后端 + 本地）
   Future<void> _syncProgress(int currentPage) async {
     if (state.currentBook == null) return;
 
@@ -437,9 +571,13 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       final bookId = state.currentBook!.id;
       final totalPages = state.totalPages;
 
-      // 更新进度
+      // 保存到本地（优先，确保离线也能记录）
+      await _saveProgressLocally(bookId, currentPage);
+      debugPrint('[_syncProgress] 本地进度已保存: ${currentPage + 1}/$totalPages');
+
+      // 同步到后端
       await readingApi.updateProgress(bookId, currentPage: currentPage + 1);
-      debugPrint('[_syncProgress] 进度已同步: ${currentPage + 1}/$totalPages');
+      debugPrint('[_syncProgress] 后端进度已同步: ${currentPage + 1}/$totalPages');
 
       // 如果是最后一页，标记完成
       if (currentPage >= totalPages - 1) {
@@ -448,6 +586,28 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       }
     } catch (e) {
       debugPrint('[_syncProgress] 同步进度失败: $e');
+    }
+  }
+
+  /// 保存进度到本地
+  Future<void> _saveProgressLocally(String bookId, int currentPage) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('reading_progress_$bookId', currentPage);
+    } catch (e) {
+      debugPrint('[_saveProgressLocally] 保存失败: $e');
+    }
+  }
+
+  /// 从本地恢复进度
+  Future<int?> _restoreProgressLocally(String bookId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPage = prefs.getInt('reading_progress_$bookId');
+      return savedPage;
+    } catch (e) {
+      debugPrint('[_restoreProgressLocally] 恢复失败: $e');
+      return null;
     }
   }
 
@@ -896,6 +1056,111 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       return false;
     }
   }
+
+  /// ========================================
+  /// 整页朗读：播放当前页所有句子
+  /// ========================================
+  Future<void> playAllSentences() async {
+    final sentences = state.currentSentences;
+    if (sentences.isEmpty) return;
+
+    // 停止当前播放
+    await stopPlaying();
+
+    // 设置整页朗读状态
+    state = state.copyWith(
+      isPlayingAll: true,
+      playingAllIndex: 0,
+      isPlayingAllPaused: false,
+      activeSentenceId: sentences.first.id,
+    );
+
+    debugPrint('[playAllSentences] 开始整页朗读，共 ${sentences.length} 个句子');
+
+    // 开始播放第一个句子
+    await _playSentenceInSequence(0);
+  }
+
+  /// 播放序列中的指定句子
+  Future<void> _playSentenceInSequence(int index) async {
+    final sentences = state.currentSentences;
+    if (index >= sentences.length || !state.isPlayingAll) return;
+
+    final sentence = sentences[index];
+
+    // 更新当前播放索引和活跃句子
+    state = state.copyWith(
+      playingAllIndex: index,
+      activeSentenceId: sentence.id,
+      isPlaying: true,
+    );
+
+    debugPrint('[_playSentenceInSequence] 播放第 ${index + 1} 个句子: ${sentence.en}');
+
+    // 播放句子
+    final success = await playSentence(sentence);
+
+    if (!success && state.isPlayingAll) {
+      // 播放失败，停止整页朗读
+      debugPrint('[_playSentenceInSequence] 播放失败，停止整页朗读');
+      state = state.copyWith(
+        isPlayingAll: false,
+        playingAllIndex: -1,
+        isPlaying: false,
+        clearPlayingAll: true,
+      );
+    }
+  }
+
+  /// 整页朗读：暂停
+  Future<void> pauseAllSentences() async {
+    await _ttsService.pause();
+    state = state.copyWith(
+      isPlayingAllPaused: true,
+      isPlaying: false,
+    );
+    debugPrint('[pauseAllSentences] 整页朗读已暂停');
+  }
+
+  /// 整页朗读：继续
+  Future<void> resumeAllSentences() async {
+    if (!state.isPlayingAll || state.playingAllIndex < 0) return;
+
+    state = state.copyWith(isPlayingAllPaused: false);
+
+    // 继续播放当前句子
+    final sentences = state.currentSentences;
+    if (state.playingAllIndex < sentences.length) {
+      await playSentence(sentences[state.playingAllIndex]);
+    }
+    debugPrint('[resumeAllSentences] 整页朗读继续');
+  }
+
+  /// 整页朗读：停止
+  Future<void> stopAllSentences() async {
+    await _ttsService.stop();
+    state = state.copyWith(
+      isPlayingAll: false,
+      playingAllIndex: -1,
+      isPlayingAllPaused: false,
+      isPlaying: false,
+      clearActiveSentence: true,
+    );
+    debugPrint('[stopAllSentences] 整页朗读已停止');
+  }
+
+  /// 整页朗读：切换播放/暂停
+  Future<void> togglePlayAllSentences() async {
+    if (state.isPlayingAll) {
+      if (state.isPlayingAllPaused) {
+        await resumeAllSentences();
+      } else {
+        await pauseAllSentences();
+      }
+    } else {
+      await playAllSentences();
+    }
+  }
 }
 
 /// ========================================
@@ -931,4 +1196,10 @@ final isLoadingProvider = Provider<bool>((ref) {
 
 final currentSentencesProvider = Provider<List<Sentence>>((ref) {
   return ref.watch(readingProvider).currentSentences;
+});
+
+/// 当前播放的单词进度（用于单词级高亮）
+final wordProgressProvider = Provider<(int, int)>((ref) {
+  final state = ref.watch(readingProvider);
+  return (state.currentWordStart, state.currentWordEnd);
 });

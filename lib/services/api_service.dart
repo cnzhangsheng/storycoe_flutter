@@ -544,14 +544,14 @@ class GenerateApi {
 
   GenerateApi(this._client);
 
-  /// Generate book from images
-  /// Returns a Stream<String> of SSE events
-  Stream<String> generateBook({
+  /// Generate book from images (async version)
+  /// Returns immediately after upload, OCR runs in background
+  Future<Map<String, dynamic>> generateBook({
     required String title,
     (String, List<int>)? cover, // (filename, bytes) - 封面图片
     required List<(String, List<int>)> images, // (filename, bytes)
     String? token,
-  }) async* {
+  }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/generate/book');
     _log('准备请求', {'url': uri.toString(), 'title': title, 'imageCount': images.length, 'hasCover': cover != null});
 
@@ -593,26 +593,68 @@ class GenerateApi {
     }
 
     _log('发送请求...');
-    // Send request - use the underlying HTTP client's send method
+    // Send request
     final streamedResponse = await _client.httpClient.send(request);
 
     _log('收到响应', {'statusCode': streamedResponse.statusCode});
+
+    // Read response body
+    final responseBody = await streamedResponse.stream.bytesToString();
+
     if (streamedResponse.statusCode != 200) {
-      // 读取错误响应
+      _log('错误响应', {'statusCode': streamedResponse.statusCode, 'body': responseBody});
+      throw ApiException(
+        statusCode: streamedResponse.statusCode,
+        message: responseBody,
+      );
+    }
+
+    final result = jsonDecode(responseBody) as Map<String, dynamic>;
+    _log('上传成功', result);
+    return result;
+  }
+
+  /// Generate book from images (sync version - deprecated)
+  /// Returns a Stream<String> of SSE events
+  @Deprecated('Use generateBook instead - this is the old sync version')
+  Stream<String> generateBookSync({
+    required String title,
+    (String, List<int>)? cover,
+    required List<(String, List<int>)> images,
+    String? token,
+  }) async* {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/generate/book/sync');
+    _log('准备请求', {'url': uri.toString(), 'title': title, 'imageCount': images.length, 'hasCover': cover != null});
+
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    request.fields['title'] = title;
+
+    if (cover != null) {
+      final (filename, bytes) = cover;
+      request.files.add(http.MultipartFile.fromBytes('cover', bytes, filename: filename));
+    }
+
+    for (var i = 0; i < images.length; i++) {
+      final (filename, bytes) = images[i];
+      request.files.add(http.MultipartFile.fromBytes('images', bytes, filename: filename));
+    }
+
+    final streamedResponse = await _client.httpClient.send(request);
+
+    if (streamedResponse.statusCode != 200) {
       final errorBody = await streamedResponse.stream.bytesToString();
-      _log('错误响应', {'statusCode': streamedResponse.statusCode, 'body': errorBody});
       yield 'data: {"error": "请求失败: ${streamedResponse.statusCode}"}';
       return;
     }
 
-    // Stream the response
-    int chunkCount = 0;
     await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
-      chunkCount++;
-      _log('数据块 #$chunkCount', {'length': chunk.length});
       yield chunk;
     }
-    _log('流结束', {'totalChunks': chunkCount});
   }
 }
 

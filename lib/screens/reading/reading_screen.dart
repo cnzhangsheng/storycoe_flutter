@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:photo_view/photo_view.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:storycoe_flutter/core/theme/app_colors.dart';
 import 'package:storycoe_flutter/models/sentence.dart';
 import 'package:storycoe_flutter/providers/books_provider.dart';
@@ -50,9 +52,21 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 屏幕方向偏好：'portrait' | 'landscape' | 'auto'
   String _orientationMode = 'auto';
 
+  /// 图片实际尺寸（用于自适应布局）
+  Size? _imageSize;
+
+  /// 是否显示滑动翻页提示
+  bool _showSwipeHint = true;
+
   @override
   void initState() {
     super.initState();
+
+    // 3秒后自动隐藏滑动提示
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showSwipeHint = false);
+    });
+
     // 预初始化 TTS，确保用户点击播放按钮时引擎已就绪（解决 Android 小米手机 TTS 不工作问题）
     _initTts();
     // 检查是否需要加载书籍
@@ -85,18 +99,49 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     }
   }
 
+  /// 获取图片实际尺寸
+  void _loadImageSize(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      _imageSize = null;
+      return;
+    }
+
+    final imageProvider = _getImageProvider(imageUrl);
+    imageProvider.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener(
+        (ImageInfo info, bool _) {
+          if (mounted) {
+            setState(() {
+              _imageSize = Size(
+                info.image.width.toDouble(),
+                info.image.height.toDouble(),
+              );
+            });
+          }
+        },
+        onError: (exception, stackTrace) {
+          debugPrint('[ReadingScreen] 获取图片尺寸失败: $exception');
+          _imageSize = null;
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _imageController.dispose();
     // 离开页面时停止阅读
     ref.read(readingProvider.notifier).stopReading();
-    // 恢复默认屏幕方向
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // 恢复默认屏幕方向（允许所有方向）
+    // 使用 Future.microtask 确保在当前帧完成后执行
+    Future.microtask(() {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    });
     super.dispose();
   }
 
@@ -319,50 +364,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // 调试按钮
-          GestureDetector(
-            onTap: () => _showTtsDebugDialog(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                LucideIcons.bug,
-                size: 20,
-                color: Colors.orange.shade700,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // 屏幕方向按钮
-          GestureDetector(
-            onTap: () => _showOrientationDialog(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.primaryContainer.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _orientationMode == 'portrait'
-                    ? LucideIcons.smartphone
-                    : _orientationMode == 'landscape'
-                        ? LucideIcons.tablet
-                        : LucideIcons.smartphoneNfc,
-                size: 20,
-                color: AppColors.primaryContainer,
-              ),
             ),
           ),
 
@@ -747,6 +748,40 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
             ),
             const SizedBox(height: 24),
 
+            // 横竖屏设置按钮
+            _buildMenuButton(
+              icon: _orientationMode == 'portrait'
+                  ? LucideIcons.smartphone
+                  : _orientationMode == 'landscape'
+                      ? LucideIcons.tablet
+                      : LucideIcons.smartphoneNfc,
+              label: _orientationMode == 'portrait'
+                  ? '竖屏模式'
+                  : _orientationMode == 'landscape'
+                      ? '横屏模式'
+                      : '自动方向',
+              color: AppColors.tertiaryContainer,
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showOrientationDialog(context);
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            // 调试按钮
+            _buildMenuButton(
+              icon: LucideIcons.bug,
+              label: 'TTS 调试',
+              color: Colors.orange,
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showTtsDebugDialog(context);
+              },
+            ),
+
+            const SizedBox(height: 12),
+
             // 编辑按钮
             _buildMenuButton(
               icon: LucideIcons.pencil,
@@ -1068,11 +1103,25 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 竖屏布局
   /// ========================================
   Widget _buildPortraitLayout() {
+    // 根据图片宽高比计算高度
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    double imageHeight = 200; // 默认高度
+
+    if (_imageSize != null && _imageSize!.width > 0 && _imageSize!.height > 0) {
+      final imageAspect = _imageSize!.width / _imageSize!.height;
+      // 根据屏幕宽度计算图片高度
+      final calculatedHeight = (screenWidth - 104) / imageAspect; // 减去边距和按钮
+      // 限制最小150px，最大为屏幕高度的40%
+      imageHeight = calculatedHeight.clamp(150.0, screenHeight * 0.4);
+    }
+
     return Column(
       children: [
-        // 绘本图片区域（带翻页按钮，固定高度）
+        // 绘本图片区域（带翻页按钮，自适应高度）
         SizedBox(
-          height: 200,
+          height: imageHeight,
           child: _buildImageSectionWithControls(),
         ),
 
@@ -1088,11 +1137,25 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 横屏布局
   /// ========================================
   Widget _buildLandscapeLayout() {
+    // 根据图片宽高比计算宽度
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    double imageWidth = 260; // 默认宽度
+
+    if (_imageSize != null && _imageSize!.width > 0 && _imageSize!.height > 0) {
+      final imageAspect = _imageSize!.width / _imageSize!.height;
+      // 根据屏幕高度计算图片宽度
+      final calculatedWidth = (screenHeight - 80) * imageAspect; // 减去边距
+      // 限制最小200px，最大为屏幕宽度的45%
+      imageWidth = calculatedWidth.clamp(200.0, screenWidth * 0.45);
+    }
+
     return Row(
       children: [
-        // 左侧：绘本图片（带翻页按钮）
+        // 左侧：绘本图片（带翻页按钮，自适应宽度）
         SizedBox(
-          width: 260,
+          width: imageWidth,
           child: _buildImageSectionWithControls(),
         ),
 
@@ -1107,81 +1170,26 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   }
 
   /// ========================================
-  /// 绘本图片区域（带翻页按钮在两侧）
+  /// 绘本图片区域
   /// ========================================
   Widget _buildImageSectionWithControls() {
-    final currentPage = ref.watch(readingProvider).currentPage;
-    final totalPages = ref.watch(readingProvider).totalPages;
-
-    return Row(
-      children: [
-        // 上一页按钮
-        _buildCompactPageButton(
-          icon: LucideIcons.chevronLeft,
-          enabled: currentPage > 0,
-          onTap: currentPage > 0
-              ? () {
-                  ref.read(readingProvider.notifier).prevPage();
-                  _imageController.value = Matrix4.identity();
-                }
-              : null,
-        ),
-
-        // 图片区域
-        Expanded(
-          child: _buildImageSection(),
-        ),
-
-        // 下一页按钮
-        _buildCompactPageButton(
-          icon: LucideIcons.chevronRight,
-          enabled: currentPage < totalPages - 1,
-          onTap: currentPage < totalPages - 1
-              ? () {
-                  ref.read(readingProvider.notifier).nextPage();
-                  _imageController.value = Matrix4.identity();
-                }
-              : null,
-        ),
-      ],
-    );
-  }
-
-  /// 紧凑翻页按钮
-  Widget _buildCompactPageButton({
-    required IconData icon,
-    required bool enabled,
-    required VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: enabled
-              ? AppColors.primaryContainer.withValues(alpha: 0.9)
-              : AppColors.surfaceContainerHigh.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: enabled
-              ? AppColors.onPrimaryContainer
-              : AppColors.onSurfaceVariant.withValues(alpha: 0.3),
-        ),
-      ),
-    );
+    return _buildImageSection();
   }
 
   /// ========================================
-  /// 绘本图片区域（支持缩放、拖动）
+  /// 绘本图片区域（支持缩放、拖动、淡入淡出翻页）
   /// ========================================
   Widget _buildImageSection() {
     final currentPageData = ref.watch(readingProvider).currentPageData;
     final currentPage = ref.watch(readingProvider).currentPage;
     final imageUrl = currentPageData?.imageUrl;
+
+    // 加载图片尺寸（用于自适应布局）
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadImageSize(imageUrl);
+      });
+    }
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -1200,73 +1208,43 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
         borderRadius: BorderRadius.circular(14),
         child: Stack(
           children: [
-            // 可缩放图片
-            PhotoView(
-              key: ValueKey('page_$currentPage'),
-              imageProvider: _getImageProvider(imageUrl),
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: PhotoViewComputedScale.covered * 2,
-              initialScale: PhotoViewComputedScale.contained,
-              backgroundDecoration: BoxDecoration(
-                color: AppColors.surfaceContainerHigh,
-              ),
-              loadingBuilder: (context, event) => Center(
-                child: CircularProgressIndicator(
-                  value: event?.expectedTotalBytes != null
-                      ? event!.cumulativeBytesLoaded / event.expectedTotalBytes!
-                      : null,
-                  color: AppColors.primaryContainer,
-                ),
-              ),
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      LucideIcons.imageOff,
-                      size: 48,
-                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+            // 淡入淡出翻页动画
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: GestureDetector(
+                key: ValueKey('page_$currentPage'),
+                onHorizontalDragEnd: (details) {
+                  _handleSwipePage(details, currentPage);
+                },
+                child: PhotoView(
+                  key: ValueKey('photoview_$currentPage'),
+                  imageProvider: _getImageProvider(imageUrl),
+                  minScale: PhotoViewComputedScale.contained,
+                  maxScale: PhotoViewComputedScale.covered * 2,
+                  initialScale: PhotoViewComputedScale.contained,
+                  backgroundDecoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                  ),
+                  loadingBuilder: (context, event) => _buildImageSkeleton(),
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.imageOff,
+                          size: 48,
+                          color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '图片加载失败',
+                          style: TextStyle(
+                            color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '图片加载失败',
-                      style: TextStyle(
-                        color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // 缩放提示
-            Positioned(
-              bottom: 12,
-              right: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      LucideIcons.zoomIn,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      '双指缩放',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1274,6 +1252,30 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
         ),
       ),
     );
+  }
+
+  /// 处理滑动翻页
+  void _handleSwipePage(DragEndDetails details, int currentPage) {
+    const double sensitivity = 100; // 滑动阈值
+    if (details.primaryVelocity == null) return;
+
+    final totalPages = ref.read(readingProvider).totalPages;
+
+    if (details.primaryVelocity! < -sensitivity) {
+      // 向左滑 → 下一页
+      if (currentPage < totalPages - 1) {
+        _imageController.value = Matrix4.identity();
+        ref.read(readingProvider.notifier).nextPage();
+        if (_showSwipeHint) setState(() => _showSwipeHint = false);
+      }
+    } else if (details.primaryVelocity! > sensitivity) {
+      // 向右滑 → 上一页
+      if (currentPage > 0) {
+        _imageController.value = Matrix4.identity();
+        ref.read(readingProvider.notifier).prevPage();
+        if (_showSwipeHint) setState(() => _showSwipeHint = false);
+      }
+    }
   }
 
   /// 获取图片提供者
@@ -1286,12 +1288,63 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
       return AssetImage(imageUrl);
     }
 
-    // 网络图片
+    // 网络图片：使用 CachedNetworkImageProvider 实现持久缓存
     final fullUrl = imageUrl.startsWith('http')
         ? imageUrl
         : '${ApiConfig.baseUrl}$imageUrl';
 
-    return NetworkImage(fullUrl) as ImageProvider;
+    return CachedNetworkImageProvider(fullUrl);
+  }
+
+  /// 图片骨架屏（加载占位）
+  Widget _buildImageSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: AppColors.surfaceContainerHigh,
+      highlightColor: AppColors.surfaceContainerHighest,
+      child: Container(
+        color: AppColors.surfaceContainerHigh,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 绘本图标
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  LucideIcons.bookOpen,
+                  size: 40,
+                  color: AppColors.surfaceContainerHigh,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 加载文字
+              Container(
+                width: 100,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 预缓存图片到内存
+  void _preloadImages(List<String?> imageUrls) {
+    for (final url in imageUrls) {
+      if (url == null || url.isEmpty) continue;
+      final imageProvider = _getImageProvider(url);
+      precacheImage(imageProvider, context);
+    }
   }
 
   /// ========================================
@@ -1302,6 +1355,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     final currentPage = ref.watch(readingProvider).currentPage;
     final activeSentenceId = ref.watch(readingProvider).activeSentenceId;
     final showTranslation = ref.watch(readingProvider).showTranslation;
+    final totalPages = ref.watch(readingProvider).totalPages;
 
     return Container(
       decoration: BoxDecoration(
@@ -1317,6 +1371,36 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
       ),
       child: Column(
         children: [
+          // 滑动翻页提示
+          if (_showSwipeHint && totalPages > 1)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer.withAlpha(25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.hand,
+                    size: 14,
+                    color: AppColors.primaryContainer,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '左右滑动图片可翻页',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.primaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 标题栏
           _buildSentencesHeader(),
 
@@ -1643,46 +1727,73 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     }
 
     // 默认显示添加按钮
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 8),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            _isAddingSentence = true;
-          });
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.primaryContainer.withValues(alpha: 0.1),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12, top: 8),
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                _isAddingSentence = true;
+              });
+            },
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.primaryContainer.withValues(alpha: 0.3),
-              style: BorderStyle.solid,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryContainer.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.primaryContainer.withValues(alpha: 0.3),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.plus,
+                    size: 20,
+                    color: AppColors.primaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '添加新句子',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryContainer,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+        // 左滑操作提示
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                LucideIcons.plus,
-                size: 20,
-                color: AppColors.primaryContainer,
+                LucideIcons.hand,
+                size: 12,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               Text(
-                '添加新句子',
+                '左滑句子可编辑或删除',
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primaryContainer,
+                  fontSize: 11,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1729,12 +1840,52 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     final showTranslation = ref.watch(readingProvider).showTranslation;
     final speedLabel = ref.watch(readingProvider).speedLabel;
     final accent = ref.watch(readingProvider).accent;
-    final loopEnabled = ref.watch(readingProvider).loopEnabled;
+    final isPlayingAll = ref.watch(readingProvider).isPlayingAll;
+    final isPlayingAllPaused = ref.watch(readingProvider).isPlayingAllPaused;
+    final sentences = ref.watch(readingProvider).currentSentences;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
         children: [
+          // 整页朗读按钮
+          if (sentences.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                ref.read(readingProvider.notifier).togglePlayAllSentences();
+              },
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isPlayingAll
+                      ? AppColors.secondaryContainer
+                      : AppColors.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: isPlayingAll
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: AppColors.primaryContainer.withAlpha(50),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                ),
+                child: Icon(
+                  isPlayingAll
+                      ? (isPlayingAllPaused ? LucideIcons.play : LucideIcons.pause)
+                      : LucideIcons.playCircle,
+                  size: 16,
+                  color: isPlayingAll
+                      ? AppColors.onSecondaryContainer
+                      : AppColors.onPrimaryContainer,
+                ),
+              ),
+            ),
+
+          if (sentences.isNotEmpty) const SizedBox(width: 8),
+
           // 标题
           const Text(
             '朗读练习',
@@ -1786,32 +1937,6 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
           ),
 
           const Spacer(),
-
-          // 循环播放按钮
-          GestureDetector(
-            onTap: () {
-              ref.read(readingProvider.notifier).toggleLoop();
-            },
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: loopEnabled
-                    ? AppColors.tertiaryContainer
-                    : AppColors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                LucideIcons.repeat,
-                size: 14,
-                color: loopEnabled
-                    ? AppColors.onTertiaryContainer
-                    : AppColors.onSurfaceVariant,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 6),
 
           // 发音选择器（紧凑）
           _buildCompactAccentSelector(accent),

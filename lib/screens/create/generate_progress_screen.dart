@@ -8,7 +8,7 @@ import 'package:storycoe_flutter/providers/create_provider.dart';
 import 'package:storycoe_flutter/providers/books_provider.dart';
 
 /// 生成朗读绘本进度页面
-/// 显示生成进度，提示用户可稍后在绘本架查看
+/// 显示上传结果，OCR 在后台异步处理
 class GenerateProgressScreen extends ConsumerStatefulWidget {
   const GenerateProgressScreen({super.key});
 
@@ -18,55 +18,27 @@ class GenerateProgressScreen extends ConsumerStatefulWidget {
 }
 
 class _GenerateProgressScreenState
-    extends ConsumerState<GenerateProgressScreen> with WidgetsBindingObserver {
-  bool _wasGenerating = false;
-
+    extends ConsumerState<GenerateProgressScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    final createState = ref.read(createProvider);
-
-    if (state == AppLifecycleState.paused) {
-      // 应用进入后台，记录是否正在生成
-      _wasGenerating = createState.isGenerating;
-    } else if (state == AppLifecycleState.resumed) {
-      // 应用恢复到前台
-      if (_wasGenerating && !createState.isGenerating && createState.error == null) {
-        // 之前在生成，但现在已经不在生成且没有错误
-        // 说明连接可能已断开，但状态未正确更新
-        // 刷新书籍列表，让用户可以在首页查看
-        ref.read(booksProvider.notifier).loadBooks();
-      }
-      _wasGenerating = false;
-    }
+    // 刷新书籍列表
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(booksProvider.notifier).loadBooks();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final createState = ref.watch(createProvider);
-    final progress = createState.generateProgress;
-    final isGenerating = createState.isGenerating;
     final error = createState.error;
     final bookId = createState.generatedBookId;
 
-    // 生成完成且无错误
-    final isCompleted = !isGenerating && bookId != null && error == null;
+    // 上传成功
+    final isSuccess = bookId != null && error == null;
 
-    // 生成失败
-    final isFailed = !isGenerating && error != null;
+    // 上传失败
+    final isFailed = error != null;
 
     return Scaffold(
       body: SafeArea(
@@ -76,23 +48,23 @@ class _GenerateProgressScreenState
             children: [
               const Spacer(),
 
-              // 进度指示器
-              _buildProgressIndicator(progress, isGenerating, isCompleted),
+              // 状态图标
+              _buildStatusIcon(isSuccess, isFailed),
 
               const SizedBox(height: 32),
 
-              // 进度消息
-              _buildProgressMessage(progress, isCompleted, isFailed, error),
+              // 状态消息
+              _buildStatusMessage(isSuccess, isFailed, error),
 
               const Spacer(),
 
               // 提示卡片
-              _buildTipCard(isCompleted),
+              _buildTipCard(isSuccess),
 
               const SizedBox(height: 24),
 
               // 按钮区域
-              _buildButtons(isCompleted, isFailed, bookId),
+              _buildButtons(isSuccess, isFailed, bookId),
 
               const SizedBox(height: 24),
             ],
@@ -102,82 +74,69 @@ class _GenerateProgressScreenState
     );
   }
 
-  Widget _buildProgressIndicator(
-    GenerateProgress progress,
-    bool isGenerating,
-    bool isCompleted,
-  ) {
-    final displayProgress = isCompleted ? 100 : progress.progress;
+  Widget _buildStatusIcon(bool isSuccess, bool isFailed) {
+    IconData icon;
+    Color iconColor;
+    Color bgColor;
 
-    return SizedBox(
-      width: 120,
-      height: 120,
-      child: Stack(
-        children: [
-          CircularProgressIndicator(
-            value: displayProgress / 100,
-            strokeWidth: 12,
-            backgroundColor: AppColors.surfaceContainerHigh,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isCompleted ? AppColors.tertiaryContainer : AppColors.secondaryContainer,
-            ),
-          ),
-          Center(
-            child: isCompleted
-                ? Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(
-                      LucideIcons.check,
-                      size: 24,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text(
-                    '$displayProgress%',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.onPrimaryFixed,
-                    ),
-                  ),
+    if (isSuccess) {
+      icon = LucideIcons.check;
+      iconColor = Colors.white;
+      bgColor = AppColors.tertiaryContainer;
+    } else if (isFailed) {
+      icon = LucideIcons.x;
+      iconColor = Colors.white;
+      bgColor = AppColors.error;
+    } else {
+      icon = LucideIcons.loader2;
+      iconColor = AppColors.onPrimaryFixed;
+      bgColor = AppColors.surfaceContainerLow;
+    }
+
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: bgColor.withValues(alpha: 0.3),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: Icon(
+        icon,
+        size: 48,
+        color: iconColor,
       ),
     );
   }
 
-  Widget _buildProgressMessage(
-    GenerateProgress progress,
-    bool isCompleted,
-    bool isFailed,
-    String? error,
-  ) {
-    String message;
+  Widget _buildStatusMessage(bool isSuccess, bool isFailed, String? error) {
+    String title;
     String subtitle;
 
-    if (isCompleted) {
-      message = '绘本生成完成！';
-      subtitle = '快去朗读吧！';
+    if (isSuccess) {
+      title = '上传成功！';
+      subtitle = '图片正在后台处理中，请稍后在绘本架查看';
     } else if (isFailed) {
-      message = '生成失败';
+      title = '上传失败';
       subtitle = error ?? '请稍后重试';
     } else {
-      message = progress.message.isNotEmpty ? progress.message : '正在生成...';
-      subtitle = '请稍候，这可能需要几分钟';
+      title = '正在上传...';
+      subtitle = '请稍候';
     }
 
     return Column(
       children: [
         Text(
-          message,
+          title,
           style: const TextStyle(
             fontFamily: 'PlusJakartaSans',
-            fontSize: 20,
+            fontSize: 24,
             fontWeight: FontWeight.w900,
             color: AppColors.onPrimaryFixed,
           ),
@@ -198,7 +157,7 @@ class _GenerateProgressScreenState
     );
   }
 
-  Widget _buildTipCard(bool isCompleted) {
+  Widget _buildTipCard(bool isSuccess) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -224,12 +183,10 @@ class _GenerateProgressScreenState
             ),
           ),
           const SizedBox(width: 16),
-          Expanded(
+          const Expanded(
             child: Text(
-              isCompleted
-                  ? '绘本已添加到绘本架，您可以随时阅读'
-                  : '生成完成后，您可以在首页绘本架查看并朗读这本绘本',
-              style: const TextStyle(
+              '文字识别需要一些时间，您可以先去探索其他内容，稍后回来查看',
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: AppColors.onPrimaryFixed,
@@ -241,77 +198,42 @@ class _GenerateProgressScreenState
     );
   }
 
-  Widget _buildButtons(bool isCompleted, bool isFailed, String? bookId) {
-    // 返回首页按钮（始终显示）
-    final homeButton = ElevatedButton(
+  Widget _buildButtons(bool isSuccess, bool isFailed, String? bookId) {
+    // 主按钮
+    final primaryButton = ElevatedButton(
       onPressed: () {
-        if (isCompleted || isFailed) {
-          // 完成或失败时清空所有状态
+        if (isSuccess || isFailed) {
           ref.read(createProvider.notifier).resetAll();
         }
         context.go('/home');
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.surfaceContainerLow,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: isSuccess
+            ? AppColors.secondaryContainer
+            : AppColors.surfaceContainerLow,
+        foregroundColor: isSuccess
+            ? AppColors.onSecondaryContainer
+            : AppColors.onSurface,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLG),
         ),
         elevation: 0,
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.home, size: 20),
-          SizedBox(width: 8),
+          Icon(isSuccess ? LucideIcons.home : LucideIcons.arrowLeft, size: 20),
+          const SizedBox(width: 8),
           Text(
-            '返回首页',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            isSuccess ? '返回首页' : '返回',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ],
       ),
     );
 
-    // 完成后显示"立即阅读"按钮
-    if (isCompleted && bookId != null) {
-      return Row(
-        children: [
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () {
-                ref.read(createProvider.notifier).resetAll();
-                context.go('/reading/$bookId');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondaryContainer,
-                foregroundColor: AppColors.onSecondaryContainer,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                ),
-                elevation: 0,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(LucideIcons.bookOpen, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    '立即阅读',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(child: homeButton),
-        ],
-      );
-    }
-
-    // 失败时显示"重新尝试"按钮
+    // 失败时显示重试按钮
     if (isFailed) {
       return Column(
         children: [
@@ -319,7 +241,6 @@ class _GenerateProgressScreenState
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // 只清除错误，保留图片和标题
                 ref.read(createProvider.notifier).clearError();
                 context.go('/create');
               },
@@ -348,16 +269,15 @@ class _GenerateProgressScreenState
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            child: homeButton,
+            child: primaryButton,
           ),
         ],
       );
     }
 
-    // 生成中：只显示"返回首页"按钮
     return SizedBox(
       width: double.infinity,
-      child: homeButton,
+      child: primaryButton,
     );
   }
 }

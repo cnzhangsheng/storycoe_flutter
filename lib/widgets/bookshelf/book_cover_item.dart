@@ -63,6 +63,7 @@ class BookCoverItem extends StatelessWidget {
               borderRadius: borderRadius,
               isNew: book.isNew,
               level: book.level,
+              status: book.status,
             ),
           ),
           const SizedBox(height: 8),
@@ -82,13 +83,21 @@ class _BookCoverImage extends StatelessWidget {
   final double borderRadius;
   final bool isNew;
   final int level;
+  final String? status;
 
   const _BookCoverImage({
     required this.imageUrl,
     required this.borderRadius,
     this.isNew = false,
     this.level = 1,
+    this.status,
   });
+
+  /// 是否正在处理中
+  bool get isProcessing => status == 'processing' || status == 'uploading';
+
+  /// 是否处理失败
+  bool get isError => status == 'error';
 
   @override
   Widget build(BuildContext context) {
@@ -112,8 +121,14 @@ class _BookCoverImage extends StatelessWidget {
           ),
         ),
 
+        // 处理中遮罩
+        if (isProcessing) _buildProcessingOverlay(),
+
+        // 错误状态遮罩
+        if (isError) _buildErrorOverlay(),
+
         // NEW 标签
-        if (isNew)
+        if (isNew && !isProcessing && !isError)
           Positioned(
             top: 8,
             right: 8,
@@ -121,12 +136,82 @@ class _BookCoverImage extends StatelessWidget {
           ),
 
         // 等级标签
-        Positioned(
-          bottom: 8,
-          left: 8,
-          child: _buildLevelBadge(),
-        ),
+        if (!isProcessing && !isError)
+          Positioned(
+            bottom: 8,
+            left: 8,
+            child: _buildLevelBadge(),
+          ),
       ],
+    );
+  }
+
+  /// 处理中遮罩
+  Widget _buildProcessingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '识别中...',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 错误状态遮罩
+  Widget _buildErrorOverlay() {
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.alertCircle,
+                size: 32,
+                color: AppColors.error.withValues(alpha: 0.9),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '识别失败',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

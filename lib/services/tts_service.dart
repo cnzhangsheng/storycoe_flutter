@@ -9,6 +9,23 @@ import 'tts_web_stub.dart'
     if (dart.library.js_interop) 'tts_web.dart' as tts_web;
 
 /// ========================================
+/// TTS 朗读进度信息
+/// ========================================
+class TtsProgress {
+  final String text;
+  final int start;
+  final int end;
+  final String word;
+
+  const TtsProgress({
+    required this.text,
+    required this.start,
+    required this.end,
+    required this.word,
+  });
+}
+
+/// ========================================
 /// TTS 朗读状态枚举
 /// ========================================
 enum TtsState {
@@ -51,6 +68,9 @@ class TtsService {
   /// 状态变化回调列表（支持多个监听者）
   final List<VoidCallback> _stateCallbacks = [];
 
+  /// 进度回调列表（支持单词级高亮）
+  final List<void Function(TtsProgress)> _progressCallbacks = [];
+
   VoidCallback? onStateChanged;
 
   TtsState get state => _state;
@@ -72,6 +92,16 @@ class TtsService {
   /// 移除状态监听
   void removeStateCallback(VoidCallback callback) {
     _stateCallbacks.remove(callback);
+  }
+
+  /// 添加进度监听（单词级高亮）
+  void addProgressCallback(void Function(TtsProgress) callback) {
+    _progressCallbacks.add(callback);
+  }
+
+  /// 移除进度监听
+  void removeProgressCallback(void Function(TtsProgress) callback) {
+    _progressCallbacks.remove(callback);
   }
 
   void clearDebugLogs() {
@@ -191,6 +221,16 @@ class TtsService {
       // 设置进度回调（某些设备支持）
       _flutterTts!.setProgressHandler((text, start, end, word) {
         _log('>>> 进度: start=$start, end=$end, word=$word');
+        // 通知所有进度监听者
+        final progress = TtsProgress(
+          text: text,
+          start: start,
+          end: end,
+          word: word,
+        );
+        for (final callback in _progressCallbacks) {
+          callback(progress);
+        }
       });
 
       // iOS 设置
@@ -492,40 +532,12 @@ class TtsService {
       final result = await _flutterTts!.speak(text);
       _log('speak() 返回: $result (${result.runtimeType})');
 
-      // 等待开始回调确认
-      bool callbackReceived = false;
-      final completer = Completer<bool>();
+      // 直接返回成功（不等待回调）
+      // 原因：部分设备的 setStartHandler 回调不可靠，会导致超时误判
+      // 如果 speak() 返回成功，就认为播放已开始
+      _setState(TtsState.playing);
 
-      // 监听状态变化
-      VoidCallback? originalCallback = onStateChanged;
-      onStateChanged = () {
-        if (_state == TtsState.playing && !callbackReceived) {
-          callbackReceived = true;
-          _log('收到播放开始回调，确认成功');
-          completer.complete(true);
-        }
-        // 调用原始回调
-        originalCallback?.call();
-      };
-
-      // 等待回调或超时
-      Future.delayed(const Duration(seconds: 3), () {
-        if (!completer.isCompleted) {
-          _log('3秒超时，未收到播放开始回调');
-          completer.complete(false);
-        }
-      });
-
-      final success = await completer.future;
-
-      // 恢复原始回调
-      onStateChanged = originalCallback;
-
-      if (!success) {
-        _lastError = '播放超时，可能设备不支持 TTS';
-      }
-
-      return success;
+      return true;
     } catch (e, stack) {
       _log('speak() 异常: $e');
       _log('堆栈: $stack');

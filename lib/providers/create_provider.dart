@@ -1,10 +1,6 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:storycoe_flutter/models/sentence.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:storycoe_flutter/providers/books_provider.dart';
 
@@ -204,7 +200,7 @@ class CreateNotifier extends StateNotifier<CreateState> {
     state = state.copyWith(isGenerating: true, error: null);
   }
 
-  /// 生成绘本
+  /// 生成绘本（异步版本 - 上传后立即返回）
   Future<String?> generateBook(String title) async {
     _log('开始生成绘本', {
       'title': title,
@@ -237,7 +233,7 @@ class CreateNotifier extends StateNotifier<CreateState> {
 
       // 准备封面数据
       (String, List<int>)? coverData;
-      if (state.coverImage != null && state.coverImage!.bytes != null) {
+      if (state.coverImage != null && state.coverImage!.bytes != null && state.coverImage!.bytes!.isNotEmpty) {
         coverData = ('cover.jpg', state.coverImage!.bytes!);
         _log('准备封面', {'size': state.coverImage!.bytes!.length});
       }
@@ -266,61 +262,21 @@ class CreateNotifier extends StateNotifier<CreateState> {
 
       _log('调用 API', {'imageCount': imageData.length, 'hasCover': coverData != null});
 
-      // 调用生成 API
-      final stream = generateApi.generateBook(
+      // 调用新的异步 API
+      final response = await generateApi.generateBook(
         title: title,
         cover: coverData,
         images: imageData,
         token: token,
       );
 
-      String? bookId;
-      int chunkCount = 0;
+      final bookId = response['book_id'] as String?;
+      final status = response['status'] as String?;
+      final message = response['message'] as String?;
 
-      await for (final chunk in stream) {
-        chunkCount++;
-        _log('收到数据块 #$chunkCount', {'length': chunk.length});
+      _log('API 响应', {'bookId': bookId, 'status': status, 'message': message});
 
-        // 解析 SSE 事件
-        for (final line in chunk.split('\n')) {
-          if (line.startsWith('data: ')) {
-            final jsonStr = line.substring(6);
-            _log('解析 SSE 数据', jsonStr.length > 100 ? jsonStr.substring(0, 100) + '...' : jsonStr);
-            try {
-              final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-
-              if (data.containsKey('error')) {
-                _log('收到错误响应', data['error']);
-                state = state.copyWith(
-                  isGenerating: false,
-                  error: data['error'].toString(),
-                );
-                return null;
-              }
-
-              final progress = GenerateProgress(
-                step: data['step'] as int? ?? 0,
-                total: data['total'] as int? ?? 0,
-                progress: data['progress'] as int? ?? 0,
-                message: data['message'] as String? ?? '',
-                data: data['data'] as Map<String, dynamic>?,
-              );
-
-              _log('更新进度', {'progress': progress.progress, 'message': progress.message});
-              state = state.copyWith(generateProgress: progress);
-
-              if (progress.data != null && progress.data!['book_id'] != null) {
-                bookId = progress.data!['book_id'] as String;
-                _log('获取到 bookId', bookId);
-              }
-            } catch (e) {
-              _log('JSON 解析失败', e.toString());
-            }
-          }
-        }
-      }
-
-      _log('生成完成', {'bookId': bookId, 'totalChunks': chunkCount});
+      // 更新状态
       state = state.copyWith(
         isGenerating: false,
         generatedBookId: bookId,
@@ -341,7 +297,6 @@ class CreateNotifier extends StateNotifier<CreateState> {
       _log('生成异常', e.toString());
       _log('堆栈', stackTrace.toString());
 
-      // 检测是否是连接关闭错误（切换应用导致）
       String errorMessage = '生成失败: $e';
       final errorStr = e.toString().toLowerCase();
 
@@ -350,7 +305,7 @@ class CreateNotifier extends StateNotifier<CreateState> {
           errorStr.contains('broken pipe') ||
           errorStr.contains('socketexception') ||
           errorStr.contains('clientexception')) {
-        errorMessage = '网络连接已断开，可能是因为切换了应用。\n请检查绘本架，如果未生成成功请重试。';
+        errorMessage = '网络连接已断开，请重试';
       }
 
       state = state.copyWith(

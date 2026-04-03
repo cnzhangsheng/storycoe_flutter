@@ -342,20 +342,27 @@ class _SentenceReadItemState extends ConsumerState<SentenceReadItem>
       );
     }
 
+    // 获取当前单词进度
+    final (wordStart, wordEnd) = ref.watch(wordProgressProvider);
+    final isHighlighting = widget.isActive && _playState == SentencePlayState.playing && wordStart >= 0 && wordEnd > wordStart;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.sentence.en,
-          style: TextStyle(
-            fontSize: widget.isActive ? 17 : 15,
-            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w600,
-            color: widget.isActive
-                ? AppColors.onPrimaryFixed
-                : AppColors.onSurface.withValues(alpha: 0.85),
-            height: 1.5,
-          ),
-        ),
+        // 英文句子（支持单词级高亮）
+        isHighlighting
+            ? _buildHighlightedText(widget.sentence.en, wordStart, wordEnd)
+            : Text(
+                widget.sentence.en,
+                style: TextStyle(
+                  fontSize: widget.isActive ? 17 : 15,
+                  fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w600,
+                  color: widget.isActive
+                      ? AppColors.onPrimaryFixed
+                      : AppColors.onSurface.withValues(alpha: 0.85),
+                  height: 1.5,
+                ),
+              ),
         if (widget.showTranslation && widget.sentence.zh.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -372,6 +379,52 @@ class _SentenceReadItemState extends ConsumerState<SentenceReadItem>
             ),
           ),
       ],
+    );
+  }
+
+  /// 构建高亮文本（单词级高亮）
+  Widget _buildHighlightedText(String text, int highlightStart, int highlightEnd) {
+    final spans = <TextSpan>[];
+
+    // 基础样式
+    final baseStyle = TextStyle(
+      fontSize: widget.isActive ? 17 : 15,
+      fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w600,
+      color: AppColors.onPrimaryFixed,
+      height: 1.5,
+    );
+
+    // 高亮样式
+    final highlightStyle = baseStyle.copyWith(
+      color: AppColors.secondaryContainer,
+      backgroundColor: AppColors.secondaryContainer.withValues(alpha: 0.2),
+    );
+
+    // 分割文本
+    if (highlightStart > 0) {
+      // 前面的普通文本
+      spans.add(TextSpan(
+        text: text.substring(0, highlightStart),
+        style: baseStyle,
+      ));
+    }
+
+    // 高亮的单词
+    spans.add(TextSpan(
+      text: text.substring(highlightStart, highlightEnd),
+      style: highlightStyle,
+    ));
+
+    if (highlightEnd < text.length) {
+      // 后面的普通文本
+      spans.add(TextSpan(
+        text: text.substring(highlightEnd),
+        style: baseStyle,
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
     );
   }
 
