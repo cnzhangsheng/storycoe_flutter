@@ -21,8 +21,8 @@ class Sentence {
 
   factory Sentence.fromJson(Map<String, dynamic> json) {
     return Sentence(
-      id: json['id'] as String,
-      pageId: json['page_id'] as String,
+      id: (json['id'] ?? '') as String,
+      pageId: (json['page_id'] ?? '') as String,
       sentenceOrder: json['sentence_order'] as int? ?? 1,
       en: json['en'] as String? ?? '',
       zh: json['zh'] as String? ?? '',
@@ -110,8 +110,8 @@ class BookPage {
     }
 
     return BookPage(
-      id: json['id'] as String,
-      bookId: json['book_id'] as String,
+      id: (json['id'] ?? '') as String,
+      bookId: (json['book_id'] ?? '') as String,
       pageNumber: json['page_number'] as int? ?? 1,
       imageUrl: json['image_url'] as String?,
       sentences: sentences,
@@ -209,8 +209,8 @@ class BookDetail {
     }
 
     return BookDetail(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
+      id: (json['id'] ?? '') as String,
+      userId: (json['user_id'] ?? '') as String,
       title: json['title'] as String? ?? '未命名绘本',
       level: json['level'] as int? ?? 1,
       progress: json['progress'] as int? ?? 0,

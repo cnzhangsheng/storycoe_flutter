@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 import 'package:storycoe_flutter/models/book.dart';
 import 'package:storycoe_flutter/models/sentence.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:storycoe_flutter/services/tts_service.dart';
+
+/// Maximum number of pages to cache
+const int _maxCachedPages = 10;
 
 /// ========================================
 /// 阅读页面状态
@@ -208,6 +212,30 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     _loadUserSettings();
   }
 
+  /// Add a page to the cache with LRU eviction
+  /// Keeps only the most recently used pages up to _maxCachedPages
+  Map<int, BookPage> _addToPageCache(
+    Map<int, BookPage> currentCache,
+    int pageIndex,
+    BookPage page,
+  ) {
+    final newCache = Map<int, BookPage>.from(currentCache);
+
+    // If key already exists, remove it first (will be re-added as most recent)
+    newCache.remove(pageIndex);
+
+    // If cache is full, remove the oldest entry (first key)
+    if (newCache.length >= _maxCachedPages) {
+      final oldestKey = newCache.keys.first;
+      newCache.remove(oldestKey);
+      log('[ReadingProvider] [_addToPageCache] 移除最早缓存页面: $oldestKey');
+    }
+
+    // Add the new page
+    newCache[pageIndex] = page;
+    return newCache;
+  }
+
   /// 从后端加载用户设置
   Future<void> _loadUserSettings() async {
     try {
@@ -239,18 +267,18 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       await _ttsService.setSpeechRate(state.speechRate);
       await _ttsService.setLanguage(state.languageCode);
 
-      debugPrint('[ReadingNotifier] 用户设置已加载: speed=$speedLabel, accent=$accent, loop=$loopEnabled');
+      log('[ReadingProvider] [ReadingNotifier] 用户设置已加载: speed=$speedLabel, accent=$accent, loop=$loopEnabled');
     } catch (e) {
-      debugPrint('[ReadingNotifier] 加载用户设置失败: $e');
+      log('[ReadingProvider] [ReadingNotifier] 加载用户设置失败: $e');
     }
   }
 
   /// TTS 状态变化回调
   void _onTtsStateChanged() {
-    debugPrint('[ReadingNotifier] TTS 状态变化: ${_ttsService.state}');
+    log('[ReadingProvider] [ReadingNotifier] TTS 状态变化: ${_ttsService.state}');
     // 当 TTS 变为 idle 状态时，更新 isPlaying 为 false
     if (_ttsService.state == TtsState.idle && state.isPlaying) {
-      debugPrint('[ReadingNotifier] TTS 播放完成');
+      log('[ReadingProvider] [ReadingNotifier] TTS 播放完成');
 
       // 清除单词进度
       state = state.copyWith(clearWordProgress: true);
@@ -262,11 +290,11 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
         if (nextIndex < sentences.length) {
           // 还有下一个句子
-          debugPrint('[ReadingNotifier] 整页朗读下一个句子: $nextIndex');
+          log('[ReadingProvider] [ReadingNotifier] 整页朗读下一个句子: $nextIndex');
           _playSentenceInSequence(nextIndex);
         } else {
           // 所有句子播放完成
-          debugPrint('[ReadingNotifier] 整页朗读完成');
+          log('[ReadingProvider] [ReadingNotifier] 整页朗读完成');
           state = state.copyWith(
             isPlayingAll: false,
             playingAllIndex: -1,
@@ -309,7 +337,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     final nextIndex = (currentIndex + 1) % sentences.length;
     final nextSentence = sentences[nextIndex];
 
-    debugPrint('[ReadingNotifier] 循环播放下一个句子: ${nextSentence.en}');
+    log('[ReadingProvider] [ReadingNotifier] 循环播放下一个句子: ${nextSentence.en}');
     playSentence(nextSentence);
   }
 
@@ -317,7 +345,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 开始阅读（从书架点击进入）
   /// ========================================
   Future<void> startReading(Book book) async {
-    debugPrint('[startReading] 开始阅读: bookId=${book.id}, title=${book.title}');
+    log('[ReadingProvider] [startReading] 开始阅读: bookId=${book.id}, title=${book.title}');
     state = state.copyWith(
       currentBook: book,
       currentPage: 0,
@@ -329,16 +357,16 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
     try {
       // 加载绘本详情
-      debugPrint('[startReading] 加载绘本详情...');
+      log('[ReadingProvider] [startReading] 加载绘本详情...');
       final bookDetailData = await booksApi.getBook(book.id);
-      debugPrint('[startReading] 绘本详情响应: pages=${(bookDetailData['pages'] as List?)?.length ?? 0}');
+      log('[ReadingProvider] [startReading] 绘本详情响应: pages=${(bookDetailData['pages'] as List?)?.length ?? 0}');
       final bookDetail = BookDetail.fromJson(bookDetailData);
-      debugPrint('[startReading] 解析成功: totalPages=${bookDetail.totalPages}, pages数量=${bookDetail.pages.length}');
+      log('[ReadingProvider] [startReading] 解析成功: totalPages=${bookDetail.totalPages}, pages数量=${bookDetail.pages.length}');
 
       // 打印每页的基本信息
       for (var i = 0; i < bookDetail.pages.length; i++) {
         final page = bookDetail.pages[i];
-        debugPrint('[startReading] 页面$i: pageNumber=${page.pageNumber}, imageUrl=${page.imageUrl}, sentences=${page.sentences.length}');
+        log('[ReadingProvider] [startReading] 页面$i: pageNumber=${page.pageNumber}, imageUrl=${page.imageUrl}, sentences=${page.sentences.length}');
       }
 
       // 更新状态
@@ -346,20 +374,20 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         bookDetail: bookDetail,
         isLoading: false,
       );
-      debugPrint('[startReading] 状态更新: totalPages=${state.totalPages}');
+      log('[ReadingProvider] [startReading] 状态更新: totalPages=${state.totalPages}');
 
       // 尝试恢复本地保存的进度
       final savedPage = await _restoreProgressLocally(book.id);
       int startPage = 0;
       if (savedPage != null && savedPage >= 0 && savedPage < bookDetail.totalPages) {
         startPage = savedPage;
-        debugPrint('[startReading] 从本地恢复进度: 第${startPage + 1}页');
+        log('[ReadingProvider] [startReading] 从本地恢复进度: 第${startPage + 1}页');
       }
 
       // 加载起始页内容
-      debugPrint('[startReading] 开始加载第${startPage + 1}页...');
+      log('[ReadingProvider] [startReading] 开始加载第${startPage + 1}页...');
       await _loadPage(startPage);
-      debugPrint('[startReading] 页面加载完成, loadedPages=${state.loadedPages.length}');
+      log('[ReadingProvider] [startReading] 页面加载完成, loadedPages=${state.loadedPages.length}');
 
       // 设置当前页
       if (startPage > 0) {
@@ -373,9 +401,9 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       // 预加载相邻页面
       _preloadAdjacentPages(startPage);
 
-      debugPrint('[startReading] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
+      log('[ReadingProvider] [startReading] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
     } catch (e) {
-      debugPrint('[startReading] 加载绘本失败: $e');
+      log('[ReadingProvider] [startReading] 加载绘本失败: $e');
       state = state.copyWith(
         isLoading: false,
         error: '加载绘本失败: $e',
@@ -387,11 +415,11 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 通过 bookId 开始阅读（从创作页或直接路由进入）
   /// ========================================
   Future<void> startReadingById(String bookId) async {
-    debugPrint('[startReadingById] 开始阅读: bookId=$bookId');
+    log('[ReadingProvider] [startReadingById] 开始阅读: bookId=$bookId');
 
     // 如果已经加载了相同的书，跳过
     if (state.currentBook?.id == bookId && state.bookDetail != null) {
-      debugPrint('[startReadingById] 书籍已加载，跳过');
+      log('[ReadingProvider] [startReadingById] 书籍已加载，跳过');
       return;
     }
 
@@ -405,18 +433,18 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
     try {
       // 先加载绘本基本信息
-      debugPrint('[startReadingById] 加载绘本基本信息...');
+      log('[ReadingProvider] [startReadingById] 加载绘本基本信息...');
       final bookData = await booksApi.getBook(bookId);
       final book = Book.fromJson(bookData);
-      debugPrint('[startReadingById] 绘本基本信息: title=${book.title}');
+      log('[ReadingProvider] [startReadingById] 绘本基本信息: title=${book.title}');
 
       // 设置 currentBook
       state = state.copyWith(currentBook: book);
 
       // 加载绘本详情（包含页面和句子）
-      debugPrint('[startReadingById] 加载绘本详情...');
+      log('[ReadingProvider] [startReadingById] 加载绘本详情...');
       final bookDetail = BookDetail.fromJson(bookData);
-      debugPrint('[startReadingById] 解析成功: totalPages=${bookDetail.totalPages}, pages数量=${bookDetail.pages.length}');
+      log('[ReadingProvider] [startReadingById] 解析成功: totalPages=${bookDetail.totalPages}, pages数量=${bookDetail.pages.length}');
 
       // 更新状态
       state = state.copyWith(
@@ -429,12 +457,12 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       int startPage = 0;
       if (savedPage != null && savedPage >= 0 && savedPage < bookDetail.totalPages) {
         startPage = savedPage;
-        debugPrint('[startReadingById] 从本地恢复进度: 第${startPage + 1}页');
+        log('[ReadingProvider] [startReadingById] 从本地恢复进度: 第${startPage + 1}页');
       }
 
       // 加载起始页内容
       await _loadPage(startPage);
-      debugPrint('[startReadingById] 页面加载完成');
+      log('[ReadingProvider] [startReadingById] 页面加载完成');
 
       // 设置当前页
       if (startPage > 0) {
@@ -448,9 +476,9 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       // 预加载相邻页面
       _preloadAdjacentPages(startPage);
 
-      debugPrint('[startReadingById] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
+      log('[ReadingProvider] [startReadingById] 开始阅读完成: ${book.title}, 当前页: ${state.currentPage + 1}, 总页数: ${state.totalPages}');
     } catch (e) {
-      debugPrint('[startReadingById] 加载绘本失败: $e');
+      log('[ReadingProvider] [startReadingById] 加载绘本失败: $e');
       state = state.copyWith(
         isLoading: false,
         error: '加载绘本失败: $e',
@@ -462,16 +490,16 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 加载指定页面
   /// ========================================
   Future<void> _loadPage(int pageIndex) async {
-    debugPrint('[_loadPage] 开始加载页面: pageIndex=$pageIndex');
+    log('[ReadingProvider] [_loadPage] 开始加载页面: pageIndex=$pageIndex');
 
     if (state.currentBook == null) {
-      debugPrint('[_loadPage] 错误: currentBook 为空');
+      log('[ReadingProvider] [_loadPage] 错误: currentBook 为空');
       return;
     }
 
     // 检查是否已缓存
     if (state.loadedPages.containsKey(pageIndex)) {
-      debugPrint('[_loadPage] 页面已缓存: pageIndex=$pageIndex');
+      log('[ReadingProvider] [_loadPage] 页面已缓存: pageIndex=$pageIndex');
       return;
     }
 
@@ -480,35 +508,35 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         pageIndex >= 0 &&
         pageIndex < state.bookDetail!.pages.length) {
       final page = state.bookDetail!.pages[pageIndex];
-      debugPrint('[_loadPage] bookDetail 中找到页面: pageIndex=$pageIndex, sentences=${page.sentences.length}');
+      log('[ReadingProvider] [_loadPage] bookDetail 中找到页面: pageIndex=$pageIndex, sentences=${page.sentences.length}');
       if (page.sentences.isNotEmpty) {
-        // 已有数据，加入缓存
+        // 已有数据，加入缓存（使用 LRU 策略）
         state = state.copyWith(
-          loadedPages: {...state.loadedPages, pageIndex: page},
+          loadedPages: _addToPageCache(state.loadedPages, pageIndex, page),
         );
-        debugPrint('[_loadPage] 从 bookDetail 缓存页面: pageIndex=$pageIndex');
+        log('[ReadingProvider] [_loadPage] 从 bookDetail 缓存页面: pageIndex=$pageIndex');
         return;
       }
     }
 
     try {
       // 从API加载页面（页码从1开始）
-      debugPrint('[_loadPage] 从API加载: bookId=${state.currentBook!.id}, pageNumber=${pageIndex + 1}');
+      log('[ReadingProvider] [_loadPage] 从API加载: bookId=${state.currentBook!.id}, pageNumber=${pageIndex + 1}');
       final pageData = await booksApi.getBookPage(
         state.currentBook!.id,
         pageIndex + 1,
       );
-      debugPrint('[_loadPage] API响应: pageNumber=${pageData['page_number']}, sentences=${(pageData['sentences'] as List?)?.length ?? 0}');
+      log('[ReadingProvider] [_loadPage] API响应: pageNumber=${pageData['page_number']}, sentences=${(pageData['sentences'] as List?)?.length ?? 0}');
       final page = BookPage.fromJson(pageData);
-      debugPrint('[_loadPage] 解析成功: page.pageNumber=${page.pageNumber}, sentences=${page.sentences.length}');
+      log('[ReadingProvider] [_loadPage] 解析成功: page.pageNumber=${page.pageNumber}, sentences=${page.sentences.length}');
 
-      // 更新缓存
+      // 更新缓存（使用 LRU 策略）
       state = state.copyWith(
-        loadedPages: {...state.loadedPages, pageIndex: page},
+        loadedPages: _addToPageCache(state.loadedPages, pageIndex, page),
       );
-      debugPrint('[_loadPage] 缓存成功: pageIndex=$pageIndex, 总缓存数=${state.loadedPages.length}');
+      log('[ReadingProvider] [_loadPage] 缓存成功: pageIndex=$pageIndex, 总缓存数=${state.loadedPages.length}');
     } catch (e) {
-      debugPrint('[_loadPage] 加载页面失败: pageIndex=$pageIndex, error=$e');
+      log('[ReadingProvider] [_loadPage] 加载页面失败: pageIndex=$pageIndex, error=$e');
     }
   }
 
@@ -516,10 +544,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 切换到指定页
   /// ========================================
   Future<void> goToPage(int pageIndex) async {
-    debugPrint('[goToPage] 请求切换到页面: pageIndex=$pageIndex, totalPages=${state.totalPages}');
+    log('[ReadingProvider] [goToPage] 请求切换到页面: pageIndex=$pageIndex, totalPages=${state.totalPages}');
 
     if (pageIndex < 0 || pageIndex >= state.totalPages) {
-      debugPrint('[goToPage] 无效页码: pageIndex=$pageIndex, totalPages=${state.totalPages}');
+      log('[ReadingProvider] [goToPage] 无效页码: pageIndex=$pageIndex, totalPages=${state.totalPages}');
       return;
     }
 
@@ -527,17 +555,17 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     await stopAllSentences();
 
     // 加载目标页
-    debugPrint('[goToPage] 开始加载页面...');
+    log('[ReadingProvider] [goToPage] 开始加载页面...');
     await _loadPage(pageIndex);
 
     // 更新当前页
     final sentences = state.loadedPages[pageIndex]?.sentences ?? [];
-    debugPrint('[goToPage] 页面加载完成, sentences数量=${sentences.length}');
+    log('[ReadingProvider] [goToPage] 页面加载完成, sentences数量=${sentences.length}');
     state = state.copyWith(
       currentPage: pageIndex,
       activeSentenceId: sentences.isNotEmpty ? sentences.first.id : null,
     );
-    debugPrint('[goToPage] 状态已更新: currentPage=${state.currentPage}');
+    log('[ReadingProvider] [goToPage] 状态已更新: currentPage=${state.currentPage}');
 
     // 同步阅读进度到后端
     await _syncProgress(pageIndex);
@@ -552,13 +580,13 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
     // 前一页
     if (currentPage > 0 && !state.loadedPages.containsKey(currentPage - 1)) {
-      debugPrint('[_preloadAdjacentPages] 预加载前一页: ${currentPage - 1}');
+      log('[ReadingProvider] [_preloadAdjacentPages] 预加载前一页: ${currentPage - 1}');
       _loadPage(currentPage - 1);
     }
 
     // 后一页
     if (currentPage < totalPages - 1 && !state.loadedPages.containsKey(currentPage + 1)) {
-      debugPrint('[_preloadAdjacentPages] 预加载后一页: ${currentPage + 1}');
+      log('[ReadingProvider] [_preloadAdjacentPages] 预加载后一页: ${currentPage + 1}');
       _loadPage(currentPage + 1);
     }
   }
@@ -573,19 +601,19 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
 
       // 保存到本地（优先，确保离线也能记录）
       await _saveProgressLocally(bookId, currentPage);
-      debugPrint('[_syncProgress] 本地进度已保存: ${currentPage + 1}/$totalPages');
+      log('[ReadingProvider] [_syncProgress] 本地进度已保存: ${currentPage + 1}/$totalPages');
 
       // 同步到后端
       await readingApi.updateProgress(bookId, currentPage: currentPage + 1);
-      debugPrint('[_syncProgress] 后端进度已同步: ${currentPage + 1}/$totalPages');
+      log('[ReadingProvider] [_syncProgress] 后端进度已同步: ${currentPage + 1}/$totalPages');
 
       // 如果是最后一页，标记完成
       if (currentPage >= totalPages - 1) {
         await readingApi.markCompleted(bookId);
-        debugPrint('[_syncProgress] 绘本已标记完成');
+        log('[ReadingProvider] [_syncProgress] 绘本已标记完成');
       }
     } catch (e) {
-      debugPrint('[_syncProgress] 同步进度失败: $e');
+      log('[ReadingProvider] [_syncProgress] 同步进度失败: $e');
     }
   }
 
@@ -595,7 +623,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('reading_progress_$bookId', currentPage);
     } catch (e) {
-      debugPrint('[_saveProgressLocally] 保存失败: $e');
+      log('[ReadingProvider] [_saveProgressLocally] 保存失败: $e');
     }
   }
 
@@ -606,7 +634,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       final savedPage = prefs.getInt('reading_progress_$bookId');
       return savedPage;
     } catch (e) {
-      debugPrint('[_restoreProgressLocally] 恢复失败: $e');
+      log('[ReadingProvider] [_restoreProgressLocally] 恢复失败: $e');
       return null;
     }
   }
@@ -615,12 +643,12 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 下一页
   /// ========================================
   Future<void> nextPage() async {
-    debugPrint('[nextPage] 当前页=${state.currentPage}, 总页数=${state.totalPages}');
+    log('[ReadingProvider] [nextPage] 当前页=${state.currentPage}, 总页数=${state.totalPages}');
     if (state.currentPage < state.totalPages - 1) {
-      debugPrint('[nextPage] 切换到下一页: ${state.currentPage + 1}');
+      log('[ReadingProvider] [nextPage] 切换到下一页: ${state.currentPage + 1}');
       await goToPage(state.currentPage + 1);
     } else {
-      debugPrint('[nextPage] 已到最后一页，无法继续');
+      log('[ReadingProvider] [nextPage] 已到最后一页，无法继续');
     }
   }
 
@@ -628,12 +656,12 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 上一页
   /// ========================================
   Future<void> prevPage() async {
-    debugPrint('[prevPage] 当前页=${state.currentPage}, 总页数=${state.totalPages}');
+    log('[ReadingProvider] [prevPage] 当前页=${state.currentPage}, 总页数=${state.totalPages}');
     if (state.currentPage > 0) {
-      debugPrint('[prevPage] 切换到上一页: ${state.currentPage - 1}');
+      log('[ReadingProvider] [prevPage] 切换到上一页: ${state.currentPage - 1}');
       await goToPage(state.currentPage - 1);
     } else {
-      debugPrint('[prevPage] 已到第一页，无法继续');
+      log('[ReadingProvider] [prevPage] 已到第一页，无法继续');
     }
   }
 
@@ -661,9 +689,9 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     // 持久化到后端
     try {
       await usersApi.updateSettings(speedLabel: speedLabel);
-      debugPrint('[setSpeed] 语速已保存: $speedLabel');
+      log('[ReadingProvider] [setSpeed] 语速已保存: $speedLabel');
     } catch (e) {
-      debugPrint('[setSpeed] 保存语速失败: $e');
+      log('[ReadingProvider] [setSpeed] 保存语速失败: $e');
     }
   }
 
@@ -677,9 +705,9 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     // 持久化到后端
     try {
       await usersApi.updateSettings(accent: accent == '美式' ? 'US' : (accent == '英式' ? 'GB' : 'DEFAULT'));
-      debugPrint('[setAccent] 发音已保存: $accent');
+      log('[ReadingProvider] [setAccent] 发音已保存: $accent');
     } catch (e) {
-      debugPrint('[setAccent] 保存发音失败: $e');
+      log('[ReadingProvider] [setAccent] 保存发音失败: $e');
     }
   }
 
@@ -689,13 +717,13 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   Future<void> toggleLoop() async {
     final newLoopEnabled = !state.loopEnabled;
     state = state.copyWith(loopEnabled: newLoopEnabled);
-    debugPrint('[toggleLoop] 循环播放: $newLoopEnabled');
+    log('[ReadingProvider] [toggleLoop] 循环播放: $newLoopEnabled');
     // 持久化到后端
     try {
       await usersApi.updateSettings(loopEnabled: newLoopEnabled);
-      debugPrint('[toggleLoop] 循环设置已保存: $newLoopEnabled');
+      log('[ReadingProvider] [toggleLoop] 循环设置已保存: $newLoopEnabled');
     } catch (e) {
-      debugPrint('[toggleLoop] 保存循环设置失败: $e');
+      log('[ReadingProvider] [toggleLoop] 保存循环设置失败: $e');
     }
   }
 
@@ -703,8 +731,8 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
   /// 播放句子
   /// ========================================
   Future<bool> playSentence(Sentence sentence) async {
-    debugPrint('[playSentence] 开始播放: ${sentence.en}');
-    debugPrint('[playSentence] 语速: ${state.speechRate}, 语言: ${state.languageCode}');
+    log('[ReadingProvider] [playSentence] 开始播放: ${sentence.en}');
+    log('[ReadingProvider] [playSentence] 语速: ${state.speechRate}, 语言: ${state.languageCode}');
 
     await _ttsService.init();
     _ttsService.clearError();
@@ -718,7 +746,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     // 强制设置语速和语言（每次播放前）
     await _ttsService.setSpeechRate(state.speechRate);
     await _ttsService.setLanguage(state.languageCode);
-    debugPrint('[playSentence] TTS 参数已设置');
+    log('[ReadingProvider] [playSentence] TTS 参数已设置');
 
     // 设置活跃句子
     state = state.copyWith(
@@ -730,7 +758,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     final success = await _ttsService.speak(sentence.en);
     if (!success) {
       final errorMsg = _ttsService.lastError ?? '播放失败';
-      debugPrint('[playSentence] 播放失败: $errorMsg');
+      log('[ReadingProvider] [playSentence] 播放失败: $errorMsg');
       state = state.copyWith(
         isPlaying: false,
         error: errorMsg,
@@ -796,7 +824,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       state = state.copyWith(bookDetail: updatedBookDetail);
     }
 
-    debugPrint('[updateCurrentBookTitle] 标题已更新: $newTitle');
+    log('[ReadingProvider] [updateCurrentBookTitle] 标题已更新: $newTitle');
   }
 
   /// ========================================
@@ -814,7 +842,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (state.currentBook == null) return false;
 
     try {
-      debugPrint('[updateSentence] 更新句子: $sentenceId -> $newText');
+      log('[ReadingProvider] [updateSentence] 更新句子: $sentenceId -> $newText');
 
       // 调用 API 更新
       await booksApi.updateSentence(
@@ -857,10 +885,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         state = state.copyWith(loadedPages: updatedPages);
       }
 
-      debugPrint('[updateSentence] 句子更新成功');
+      log('[ReadingProvider] [updateSentence] 句子更新成功');
       return true;
     } catch (e) {
-      debugPrint('[updateSentence] 更新失败: $e');
+      log('[ReadingProvider] [updateSentence] 更新失败: $e');
       state = state.copyWith(error: '更新句子失败: $e');
       return false;
     }
@@ -873,7 +901,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (state.currentBook == null) return null;
 
     try {
-      debugPrint('[createSentence] 创建句子: en=$en, zh=$zh');
+      log('[ReadingProvider] [createSentence] 创建句子: en=$en, zh=$zh');
 
       // 调用 API 创建句子
       final response = await booksApi.createSentence(
@@ -915,10 +943,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         state = state.copyWith(loadedPages: updatedPages);
       }
 
-      debugPrint('[createSentence] 句子创建成功: ${newSentence.id}');
+      log('[ReadingProvider] [createSentence] 句子创建成功: ${newSentence.id}');
       return newSentence;
     } catch (e) {
-      debugPrint('[createSentence] 创建失败: $e');
+      log('[ReadingProvider] [createSentence] 创建失败: $e');
       state = state.copyWith(error: '创建句子失败: $e');
       return null;
     }
@@ -938,7 +966,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (state.currentBook == null) return false;
 
     try {
-      debugPrint('[reorderSentences] 重新排序: $sentenceIds');
+      log('[ReadingProvider] [reorderSentences] 重新排序: $sentenceIds');
 
       // 调用 API 更新排序
       await booksApi.reorderSentences(
@@ -997,10 +1025,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         state = state.copyWith(loadedPages: updatedPages);
       }
 
-      debugPrint('[reorderSentences] 排序更新成功');
+      log('[ReadingProvider] [reorderSentences] 排序更新成功');
       return true;
     } catch (e) {
-      debugPrint('[reorderSentences] 排序更新失败: $e');
+      log('[ReadingProvider] [reorderSentences] 排序更新失败: $e');
       state = state.copyWith(error: '排序更新失败: $e');
       return false;
     }
@@ -1013,7 +1041,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (state.currentBook == null) return false;
 
     try {
-      debugPrint('[deleteSentence] 删除句子: $sentenceId');
+      log('[ReadingProvider] [deleteSentence] 删除句子: $sentenceId');
 
       // 调用 API 删除
       await booksApi.deleteSentence(
@@ -1048,10 +1076,10 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
         state = state.copyWith(loadedPages: updatedPages);
       }
 
-      debugPrint('[deleteSentence] 句子删除成功');
+      log('[ReadingProvider] [deleteSentence] 句子删除成功');
       return true;
     } catch (e) {
-      debugPrint('[deleteSentence] 删除失败: $e');
+      log('[ReadingProvider] [deleteSentence] 删除失败: $e');
       state = state.copyWith(error: '删除句子失败: $e');
       return false;
     }
@@ -1075,7 +1103,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       activeSentenceId: sentences.first.id,
     );
 
-    debugPrint('[playAllSentences] 开始整页朗读，共 ${sentences.length} 个句子');
+    log('[ReadingProvider] [playAllSentences] 开始整页朗读，共 ${sentences.length} 个句子');
 
     // 开始播放第一个句子
     await _playSentenceInSequence(0);
@@ -1095,14 +1123,14 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       isPlaying: true,
     );
 
-    debugPrint('[_playSentenceInSequence] 播放第 ${index + 1} 个句子: ${sentence.en}');
+    log('[ReadingProvider] [_playSentenceInSequence] 播放第 ${index + 1} 个句子: ${sentence.en}');
 
     // 播放句子
     final success = await playSentence(sentence);
 
     if (!success && state.isPlayingAll) {
       // 播放失败，停止整页朗读
-      debugPrint('[_playSentenceInSequence] 播放失败，停止整页朗读');
+      log('[ReadingProvider] [_playSentenceInSequence] 播放失败，停止整页朗读');
       state = state.copyWith(
         isPlayingAll: false,
         playingAllIndex: -1,
@@ -1119,7 +1147,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       isPlayingAllPaused: true,
       isPlaying: false,
     );
-    debugPrint('[pauseAllSentences] 整页朗读已暂停');
+    log('[ReadingProvider] [pauseAllSentences] 整页朗读已暂停');
   }
 
   /// 整页朗读：继续
@@ -1133,7 +1161,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     if (state.playingAllIndex < sentences.length) {
       await playSentence(sentences[state.playingAllIndex]);
     }
-    debugPrint('[resumeAllSentences] 整页朗读继续');
+    log('[ReadingProvider] [resumeAllSentences] 整页朗读继续');
   }
 
   /// 整页朗读：停止
@@ -1146,7 +1174,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       isPlaying: false,
       clearActiveSentence: true,
     );
-    debugPrint('[stopAllSentences] 整页朗读已停止');
+    log('[ReadingProvider] [stopAllSentences] 整页朗读已停止');
   }
 
   /// 整页朗读：切换播放/暂停

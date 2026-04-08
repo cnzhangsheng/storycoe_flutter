@@ -68,19 +68,3 @@ class UserProfile {
     );
   }
 }
-
-/// Mock user profile for development (免登录模式)
-class MockUserProfile {
-  MockUserProfile._();
-
-  static final UserProfile profile = UserProfile(
-    id: '1',
-    name: 'Lily 小象',
-    phone: '13800000000',
-    avatar: 'assets/images/avatar_lily.png',
-    level: 3,
-    booksRead: 12,
-    stars: 156,
-    streak: 5,
-  );
-}

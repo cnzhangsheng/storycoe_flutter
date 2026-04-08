@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:storycoe_flutter/core/events/auth_event.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 
-/// 日志工具
+/// Internal log function using AppLogger
 void _log(String message, [dynamic data]) {
-  final timestamp = DateTime.now().toString().substring(11, 23);
-  final logMsg = '[ApiService][$timestamp] $message';
-  if (data != null) {
-    debugPrint('$logMsg: $data');
-  } else {
-    debugPrint(logMsg);
+  if (kDebugMode) {
+    final logMsg = data != null ? '$message: $data' : message;
+    log('[ApiService] $logMsg');
   }
 }
 
@@ -67,32 +67,90 @@ class ApiClient {
   final http.Client _httpClient;
   String? _token;
 
+  /// Secure storage for sensitive data (tokens)
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  /// Maximum retry attempts for failed requests
+  static const int _maxRetries = 3;
+
+  /// Base delay between retries (exponential backoff)
+  static const Duration _retryDelay = Duration(seconds: 1);
+
   ApiClient({http.Client? client}) : _httpClient = client ?? http.Client();
 
   /// Get the underlying HTTP client for multipart requests
   http.Client get httpClient => _httpClient;
 
-  /// Get stored auth token
+  /// Get stored auth token from secure storage
   Future<String?> _getToken() async {
     if (_token != null) return _token;
 
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('auth_token');
-    return _token;
+    try {
+      _token = await _secureStorage.read(key: 'auth_token');
+      return _token;
+    } catch (e) {
+      debugPrint('[ApiClient] Error reading token from secure storage: $e');
+      return null;
+    }
   }
 
-  /// Save auth token
+  /// Save auth token to secure storage
   Future<void> saveToken(String token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
+    try {
+      await _secureStorage.write(key: 'auth_token', value: token);
+    } catch (e) {
+      debugPrint('[ApiClient] Error saving token to secure storage: $e');
+    }
   }
 
-  /// Clear auth token
+  /// Clear auth token from secure storage
   Future<void> clearToken() async {
     _token = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    try {
+      await _secureStorage.delete(key: 'auth_token');
+    } catch (e) {
+      debugPrint('[ApiClient] Error clearing token from secure storage: $e');
+    }
+  }
+
+  /// Migrate token from SharedPreferences to SecureStorage (one-time migration)
+  /// Also clears any old tokens from SharedPreferences
+  Future<void> migrateFromSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check if there's an old token in SharedPreferences
+      final oldToken = prefs.getString('auth_token');
+
+      if (oldToken != null && oldToken.isNotEmpty) {
+        _log('发现旧的 SharedPreferences token，正在迁移...');
+
+        // Check if we already have a token in SecureStorage
+        final existingToken = await _secureStorage.read(key: 'auth_token');
+
+        if (existingToken == null || existingToken.isEmpty) {
+          // Migrate to SecureStorage
+          await _secureStorage.write(key: 'auth_token', value: oldToken);
+          _token = oldToken;
+          _log('Token 已迁移到 SecureStorage');
+        }
+
+        // Always clear the old token from SharedPreferences
+        await prefs.remove('auth_token');
+        _log('已清除旧的 SharedPreferences token');
+      }
+    } catch (e) {
+      debugPrint('[ApiClient] Error migrating token: $e');
+    }
+  }
+
+  /// Get auth token (public method for external access)
+  Future<String?> getToken() async {
+    return _getToken();
   }
 
   /// Build headers for requests
@@ -112,7 +170,7 @@ class ApiClient {
     return headers;
   }
 
-  /// GET request
+  /// GET request with retry support
   Future<Map<String, dynamic>> get(
     String path, {
     bool auth = false,
@@ -123,69 +181,85 @@ class ApiClient {
     );
 
     final headers = await _buildHeaders(auth: auth);
-    _log('GET请求', {'url': uri.toString(), 'auth': auth, 'headers': headers});
+    _log('GET请求', {'url': uri.toString(), 'auth': auth});
 
-    try {
-      final response = await _httpClient.get(
-        uri,
-        headers: headers,
-      ).timeout(ApiConfig.timeoutDuration);
-
-      _log('GET响应', {'status': response.statusCode, 'body': response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)});
-      return _handleResponse(response);
-    } catch (e) {
-      _log('GET请求失败', {'url': uri.toString(), 'error': e.toString()});
-      rethrow;
-    }
+    return _executeWithRetry(
+      () => _httpClient.get(uri, headers: headers).timeout(ApiConfig.timeoutDuration),
+    );
   }
 
-  /// POST request
+  /// POST request with retry support
   Future<Map<String, dynamic>> post(
     String path, {
     bool auth = false,
     Map<String, dynamic>? body,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final headers = await _buildHeaders(auth: auth);
 
-    final response = await _httpClient.post(
-      uri,
-      headers: await _buildHeaders(auth: auth),
-      body: jsonEncode(body ?? {}),
-    ).timeout(ApiConfig.timeoutDuration);
-
-    return _handleResponse(response);
+    return _executeWithRetry(
+      () => _httpClient.post(uri, headers: headers, body: jsonEncode(body ?? {})).timeout(ApiConfig.timeoutDuration),
+    );
   }
 
-  /// PUT request
+  /// PUT request with retry support
   Future<Map<String, dynamic>> put(
     String path, {
     bool auth = false,
     Map<String, dynamic>? body,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final headers = await _buildHeaders(auth: auth);
 
-    final response = await _httpClient.put(
-      uri,
-      headers: await _buildHeaders(auth: auth),
-      body: jsonEncode(body ?? {}),
-    ).timeout(ApiConfig.timeoutDuration);
-
-    return _handleResponse(response);
+    return _executeWithRetry(
+      () => _httpClient.put(uri, headers: headers, body: jsonEncode(body ?? {})).timeout(ApiConfig.timeoutDuration),
+    );
   }
 
-  /// DELETE request
+  /// DELETE request with retry support
   Future<Map<String, dynamic>> delete(
     String path, {
     bool auth = false,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final headers = await _buildHeaders(auth: auth);
 
-    final response = await _httpClient.delete(
-      uri,
-      headers: await _buildHeaders(auth: auth),
-    ).timeout(ApiConfig.timeoutDuration);
+    return _executeWithRetry(
+      () => _httpClient.delete(uri, headers: headers).timeout(ApiConfig.timeoutDuration),
+    );
+  }
 
-    return _handleResponse(response);
+  /// Check if an error is retryable (network issues, timeouts)
+  bool _isRetryableError(dynamic error) {
+    final errorStr = error.toString().toLowerCase();
+    return errorStr.contains('socketexception') ||
+           errorStr.contains('timeoutexception') ||
+           errorStr.contains('connection') ||
+           errorStr.contains('network') ||
+           errorStr.contains('httpclientexception') ||
+           errorStr.contains('clientexception');
+  }
+
+  /// Execute a request with retry logic
+  Future<Map<String, dynamic>> _executeWithRetry(
+    Future<http.Response> Function() request, {
+    int retries = _maxRetries,
+  }) async {
+    try {
+      final response = await request();
+      return _handleResponse(response);
+    } catch (e) {
+      if (retries > 0 && _isRetryableError(e)) {
+        final delay = _retryDelay * (_maxRetries - retries + 1);
+        _log('请求失败，${delay.inSeconds}秒后重试', {
+          'remainingRetries': retries - 1,
+          'error': e.toString(),
+        });
+        await Future.delayed(delay);
+        return _executeWithRetry(request, retries: retries - 1);
+      }
+      rethrow;
+    }
   }
 
   /// Handle API response (适配后端统一响应格式)
@@ -220,9 +294,12 @@ class ApiClient {
 
     // 根据状态码或错误码抛出特定异常
     if (response.statusCode == 401 || errorCode == 'UNAUTHORIZED' || errorCode == 'AUTH_FAILED') {
+      // 清除本地 Token 并触发全局登出事件
+      clearToken();
+      authEventBus.emitLogout();
       throw ApiException(
         statusCode: response.statusCode,
-        message: '认证失败，请重新登录',
+        message: '认证已过期，请重新登录',
         errorCode: errorCode,
       );
     }
@@ -319,6 +396,24 @@ class BooksApi {
     }
 
     return _client.get('/books', auth: true, queryParams: queryParams);
+  }
+
+  /// List public books (no authentication required)
+  Future<Map<String, dynamic>> listPublicBooks({
+    int page = 1,
+    int pageSize = 20,
+    int? level,
+  }) async {
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+    };
+
+    if (level != null) {
+      queryParams['level'] = level.toString();
+    }
+
+    return _client.get('/books/public', auth: false, queryParams: queryParams);
   }
 
   /// Get book by ID
@@ -550,10 +645,11 @@ class GenerateApi {
     required String title,
     (String, List<int>)? cover, // (filename, bytes) - 封面图片
     required List<(String, List<int>)> images, // (filename, bytes)
+    String shareType = 'private', // 'public' or 'private'
     String? token,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/generate/book');
-    _log('准备请求', {'url': uri.toString(), 'title': title, 'imageCount': images.length, 'hasCover': cover != null});
+    _log('准备请求', {'url': uri.toString(), 'title': title, 'imageCount': images.length, 'hasCover': cover != null, 'shareType': shareType});
 
     final request = http.MultipartRequest('POST', uri);
 
@@ -567,6 +663,12 @@ class GenerateApi {
 
     // Add title
     request.fields['title'] = title;
+
+    // Add share_type
+    request.fields['share_type'] = shareType;
+
+    // 调试：打印所有字段
+    _log('请求字段', request.fields);
 
     // Add cover image (optional)
     if (cover != null) {

@@ -1208,48 +1208,101 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
         borderRadius: BorderRadius.circular(14),
         child: Stack(
           children: [
-            // 淡入淡出翻页动画
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: GestureDetector(
-                key: ValueKey('page_$currentPage'),
-                onHorizontalDragEnd: (details) {
-                  _handleSwipePage(details, currentPage);
-                },
-                child: PhotoView(
-                  key: ValueKey('photoview_$currentPage'),
-                  imageProvider: _getImageProvider(imageUrl),
-                  minScale: PhotoViewComputedScale.contained,
-                  maxScale: PhotoViewComputedScale.covered * 2,
-                  initialScale: PhotoViewComputedScale.contained,
-                  backgroundDecoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHigh,
-                  ),
-                  loadingBuilder: (context, event) => _buildImageSkeleton(),
-                  errorBuilder: (context, error, stackTrace) => Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.imageOff,
-                          size: 48,
-                          color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '图片加载失败',
-                          style: TextStyle(
-                            color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-                          ),
-                        ),
-                      ],
+            // 如果没有图片，显示空状态占位符
+            if (imageUrl == null || imageUrl.isEmpty)
+              _buildEmptyImagePlaceholder()
+            else
+              // 淡入淡出翻页动画
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: GestureDetector(
+                  key: ValueKey('page_$currentPage'),
+                  onHorizontalDragEnd: (details) {
+                    _handleSwipePage(details, currentPage);
+                  },
+                  child: PhotoView(
+                    key: ValueKey('photoview_$currentPage'),
+                    imageProvider: _getImageProvider(imageUrl),
+                    minScale: PhotoViewComputedScale.contained,
+                    maxScale: PhotoViewComputedScale.covered * 2,
+                    initialScale: PhotoViewComputedScale.contained,
+                    backgroundDecoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
                     ),
+                    loadingBuilder: (context, event) => _buildImageSkeleton(),
+                    errorBuilder: (context, error, stackTrace) => _buildImageError(),
                   ),
                 ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 空图片占位符
+  Widget _buildEmptyImagePlaceholder() {
+    return Container(
+      color: AppColors.surfaceContainerHigh,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                LucideIcons.imageOff,
+                size: 40,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '暂无图片',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '该页面尚未上传图片',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 图片加载错误占位符
+  Widget _buildImageError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            LucideIcons.imageOff,
+            size: 48,
+            color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '图片加载失败',
+            style: TextStyle(
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1279,11 +1332,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   }
 
   /// 获取图片提供者
-  ImageProvider _getImageProvider(String? imageUrl) {
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return const AssetImage('assets/images/book_blue_bird.png');
-    }
-
+  ImageProvider _getImageProvider(String imageUrl) {
     if (imageUrl.startsWith('assets/')) {
       return AssetImage(imageUrl);
     }

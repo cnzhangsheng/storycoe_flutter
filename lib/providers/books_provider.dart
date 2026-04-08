@@ -1,17 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 import 'package:storycoe_flutter/models/book.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:uuid/uuid.dart';
 
-/// 日志工具
+/// Internal log function using AppLogger
 void _log(String message, [dynamic data]) {
-  final timestamp = DateTime.now().toString().substring(11, 23);
-  final logMsg = '[BooksProvider][$timestamp] $message';
-  if (data != null) {
-    debugPrint('$logMsg: $data');
-  } else {
-    debugPrint(logMsg);
+  if (kDebugMode) {
+    final logMsg = data != null ? '$message: $data' : message;
+    log('[BooksProvider] $logMsg');
   }
 }
 
@@ -70,9 +68,8 @@ class BooksNotifier extends StateNotifier<BooksState> {
     } catch (e, stackTrace) {
       _log('加载失败: $e');
       _log('堆栈: $stackTrace');
-      // Fallback to mock data in development
-      _log('使用 Mock 数据');
-      state = BooksState(books: MockBooks.books, isLoading: false);
+      // 不再使用 Mock 数据回退，显示错误信息
+      state = BooksState(books: [], isLoading: false, error: '加载书籍失败: $e');
     }
   }
 
@@ -153,7 +150,7 @@ class BooksNotifier extends StateNotifier<BooksState> {
       title: title,
       level: level,
       progress: 0,
-      image: image ?? 'assets/images/book_blue_bird.png',
+      image: image, // 不设置默认图片，使用 null
       isNew: true,
     );
     state = state.copyWith(books: [book, ...state.books]);

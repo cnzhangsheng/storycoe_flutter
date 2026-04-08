@@ -26,6 +26,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   static const int _maxImagesPerPick = 20;
   static const int _maxTotalImages = 50;
 
+  /// Screen size for dynamic image sizing
+  Size _screenSize = Size.zero;
+
   @override
   void initState() {
     super.initState();
@@ -36,9 +39,13 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 从 state 中恢复标题
-    final title = ref.read(createProvider).title;
-    _titleController.text = title;
+    // Cache screen size for image optimization
+    _screenSize = MediaQuery.of(context).size;
+    // 从 state 中恢复标题（仅当 controller 为空时，避免覆盖用户输入）
+    if (_titleController.text.isEmpty) {
+      final title = ref.read(createProvider).title;
+      _titleController.text = title;
+    }
   }
 
   /// 检查是否有正在生成的任务，如果有则跳转到进度页面
@@ -74,10 +81,15 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     }
 
     try {
+      // Calculate dynamic image size based on screen
+      // Use 2x screen width/height, capped at reasonable limits
+      final maxWidth = (_screenSize.width * 2).toInt().clamp(800, 1920);
+      final maxHeight = (_screenSize.height * 2).toInt().clamp(800, 1920);
+
       final List<XFile> images = await _picker.pickMultiImage(
         imageQuality: 85,
-        maxWidth: 1920,
-        maxHeight: 1920,
+        maxWidth: maxWidth.toDouble(),
+        maxHeight: maxHeight.toDouble(),
       );
 
       if (images.isEmpty) return;
@@ -105,11 +117,15 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   Future<void> _pickCoverImage() async {
     try {
+      // Cover uses higher quality with smaller dimensions
+      final maxWidth = (_screenSize.width * 1.5).toInt().clamp(600, 1200);
+      final maxHeight = (_screenSize.height * 1.5).toInt().clamp(600, 1600);
+
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 90,
-        maxWidth: 1200,
-        maxHeight: 1200,
+        maxWidth: maxWidth.toDouble(),
+        maxHeight: maxHeight.toDouble(),
       );
 
       if (image == null) return;
@@ -144,6 +160,10 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
       _showErrorSnackBar('请输入绘本名称');
       return;
     }
+
+    // 调试：打印当前分享类型
+    final currentShareType = ref.read(createProvider).shareType;
+    debugPrint('[CreateScreen] 当前分享类型: $currentShareType');
 
     // 保存标题到 state（重试时可恢复）
     ref.read(createProvider.notifier).setTitle(title);
@@ -384,7 +404,116 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                // 分享类型选择
+                Text(
+                  '分享类型',
+                  style: TextStyle(
+                    fontFamily: 'BeVietnamPro',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurfaceVariant,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildShareTypeSelector(),
               ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 分享类型选择器
+  Widget _buildShareTypeSelector() {
+    final shareType = ref.watch(createProvider).shareType;
+
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => ref.read(createProvider.notifier).setShareType('private'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: shareType == 'private'
+                    ? AppColors.primaryContainer
+                    : AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: shareType == 'private'
+                      ? AppColors.primaryContainer
+                      : AppColors.onSurfaceVariant.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.lock,
+                    size: 16,
+                    color: shareType == 'private'
+                        ? AppColors.onPrimaryFixed
+                        : AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '私有',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: shareType == 'private'
+                          ? AppColors.onPrimaryFixed
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => ref.read(createProvider.notifier).setShareType('public'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: shareType == 'public'
+                    ? AppColors.secondaryContainer
+                    : AppColors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: shareType == 'public'
+                      ? AppColors.secondaryContainer
+                      : AppColors.onSurfaceVariant.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.globe,
+                    size: 16,
+                    color: shareType == 'public'
+                        ? AppColors.onSecondaryContainer
+                        : AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '公开',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: shareType == 'public'
+                          ? AppColors.onSecondaryContainer
+                          : AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

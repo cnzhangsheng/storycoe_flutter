@@ -90,9 +90,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   /// 开发模式直接登录
-  void _handleDevLogin() {
-    ref.read(authProvider.notifier).login();
-    context.go('/home');
+  Future<void> _handleDevLogin() async {
+    final success = await ref.read(authProvider.notifier).devLogin();
+    if (success && mounted) {
+      context.go('/home');
+    }
   }
 
   /// 显示错误提示

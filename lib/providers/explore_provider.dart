@@ -1,25 +1,29 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:storycoe_flutter/models/book.dart';
+import 'package:storycoe_flutter/services/api_service.dart';
 
 /// 探索状态
 class ExploreState {
-  final List<Book> officialBooks;
+  final List<Book> publicBooks;
   final String searchTerm;
   final int? selectedLevel;
   final int page;
   final bool isLoading;
+  final String? error;
 
   const ExploreState({
-    this.officialBooks = const [],
+    this.publicBooks = const [],
     this.searchTerm = '',
     this.selectedLevel,
     this.page = 1,
     this.isLoading = false,
+    this.error,
   });
 
   /// 过滤后的绘本列表
   List<Book> get filteredBooks {
-    return officialBooks.where((book) {
+    return publicBooks.where((book) {
       final matchesSearch =
           book.title.toLowerCase().contains(searchTerm.toLowerCase());
       final matchesLevel =
@@ -37,19 +41,22 @@ class ExploreState {
   bool get hasMore => displayedBooks.length < filteredBooks.length;
 
   ExploreState copyWith({
-    List<Book>? officialBooks,
+    List<Book>? publicBooks,
     String? searchTerm,
     int? selectedLevel,
     int? page,
     bool? isLoading,
+    String? error,
     bool clearLevel = false,
+    bool clearError = false,
   }) {
     return ExploreState(
-      officialBooks: officialBooks ?? this.officialBooks,
+      publicBooks: publicBooks ?? this.publicBooks,
       searchTerm: searchTerm ?? this.searchTerm,
       selectedLevel: clearLevel ? null : (selectedLevel ?? this.selectedLevel),
       page: page ?? this.page,
       isLoading: isLoading ?? this.isLoading,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
@@ -57,80 +64,34 @@ class ExploreState {
 /// 探索 Notifier
 class ExploreNotifier extends StateNotifier<ExploreState> {
   ExploreNotifier() : super(const ExploreState()) {
-    _loadOfficialBooks();
+    loadPublicBooks();
   }
 
-  /// 官方绘本数据（Mock）
-  static final List<Book> _mockOfficialBooks = [
-    Book(
-      id: 'o1',
-      title: 'The Magic Forest',
-      level: 1,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/forest/400/600',
-      isNew: true,
-    ),
-    Book(
-      id: 'o2',
-      title: 'Space Adventure',
-      level: 2,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/space/400/600',
-    ),
-    Book(
-      id: 'o3',
-      title: 'Ocean Friends',
-      level: 1,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/ocean/400/600',
-    ),
-    Book(
-      id: 'o4',
-      title: 'Dinosaur World',
-      level: 3,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/dino/400/600',
-    ),
-    Book(
-      id: 'o5',
-      title: 'The Brave Knight',
-      level: 2,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/knight/400/600',
-    ),
-    Book(
-      id: 'o6',
-      title: 'Little Red Riding Hood',
-      level: 1,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/red/400/600',
-    ),
-    Book(
-      id: 'o7',
-      title: 'The Ugly Duckling',
-      level: 1,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/duck/400/600',
-    ),
-    Book(
-      id: 'o8',
-      title: 'Jack and the Beanstalk',
-      level: 2,
-      progress: 0,
-      image:
-          'https://picsum.photos/seed/bean/400/600',
-    ),
-  ];
+  /// 从 API 加载公开绘本
+  Future<void> loadPublicBooks() async {
+    state = state.copyWith(isLoading: true, clearError: true);
 
-  void _loadOfficialBooks() {
-    state = state.copyWith(officialBooks: _mockOfficialBooks);
+    try {
+      final response = await booksApi.listPublicBooks();
+      final booksList = response['books'] as List;
+
+      final books = booksList
+          .map((json) => Book.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      state = state.copyWith(
+        publicBooks: books,
+        isLoading: false,
+      );
+
+      debugPrint('[ExploreProvider] 加载公开绘本成功: ${books.length} 本');
+    } catch (e) {
+      debugPrint('[ExploreProvider] 加载公开绘本失败: $e');
+      state = state.copyWith(
+        isLoading: false,
+        error: '加载失败: $e',
+      );
+    }
   }
 
   /// 设置搜索词
@@ -161,6 +122,11 @@ class ExploreNotifier extends StateNotifier<ExploreState> {
       clearLevel: true,
       page: 1,
     );
+  }
+
+  /// 刷新
+  Future<void> refresh() async {
+    await loadPublicBooks();
   }
 }
 

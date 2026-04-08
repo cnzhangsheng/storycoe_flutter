@@ -8,6 +8,7 @@ class Book {
   final bool isNew;
   final bool hasAudio;
   final String? status;
+  final String shareType; // 'public' or 'private'
 
   const Book({
     required this.id,
@@ -18,6 +19,7 @@ class Book {
     this.isNew = false,
     this.hasAudio = false,
     this.status,
+    this.shareType = 'private',
   });
 
   Book copyWith({
@@ -29,6 +31,7 @@ class Book {
     bool? isNew,
     bool? hasAudio,
     String? status,
+    String? shareType,
   }) {
     return Book(
       id: id ?? this.id,
@@ -39,6 +42,7 @@ class Book {
       isNew: isNew ?? this.isNew,
       hasAudio: hasAudio ?? this.hasAudio,
       status: status ?? this.status,
+      shareType: shareType ?? this.shareType,
     );
   }
 
@@ -52,50 +56,21 @@ class Book {
       'is_new': isNew,
       'has_audio': hasAudio,
       'status': status,
+      'share_type': shareType,
     };
   }
 
   factory Book.fromJson(Map<String, dynamic> json) {
     return Book(
-      id: json['id'] as String,
-      title: json['title'] as String,
+      id: (json['id'] ?? '') as String,
+      title: (json['title'] ?? '未命名绘本') as String,
       level: json['level'] as int? ?? 1,
       progress: json['progress'] as int? ?? 0,
       image: json['cover_image'] as String? ?? json['image'] as String?,
       isNew: json['is_new'] as bool? ?? false,
       hasAudio: json['has_audio'] as bool? ?? false,
       status: json['status'] as String?,
+      shareType: json['share_type'] as String? ?? 'private',
     );
   }
-}
-
-/// Mock books for development
-class MockBooks {
-  MockBooks._();
-
-  static final List<Book> books = [
-    Book(
-      id: '1',
-      title: "The Blue Bird's Journey",
-      level: 1,
-      progress: 65,
-      image: 'assets/images/book_blue_bird.png',
-      isNew: true,
-    ),
-    Book(
-      id: '2',
-      title: 'Moonlight Magic',
-      level: 2,
-      progress: 30,
-      image: 'assets/images/book_moonlight.png',
-      hasAudio: true,
-    ),
-    Book(
-      id: '3',
-      title: 'The Curious Fox',
-      level: 1,
-      progress: 100,
-      image: 'assets/images/book_curious_fox.png',
-    ),
-  ];
 }

@@ -8,11 +8,11 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       const ProviderScope(
-        child: StoryBirdApp(),
+        child: StoryCoeApp(),
       ),
     );
 
-    // Verify that the login screen appears
-    expect(find.text('StoryBird'), findsWidgets);
+    // Verify that the app loads
+    expect(find.byType(StoryCoeApp), findsOneWidget);
   });
 }

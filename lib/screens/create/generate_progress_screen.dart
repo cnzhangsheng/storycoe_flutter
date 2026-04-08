@@ -205,6 +205,8 @@ class _GenerateProgressScreenState
         if (isSuccess || isFailed) {
           ref.read(createProvider.notifier).resetAll();
         }
+        // 返回首页前刷新书籍列表
+        ref.read(booksProvider.notifier).loadBooks();
         context.go('/home');
       },
       style: ElevatedButton.styleFrom(

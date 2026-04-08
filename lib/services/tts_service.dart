@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 
 // Conditional import for Web Speech API
 import 'tts_web_stub.dart'
@@ -113,12 +114,14 @@ class TtsService {
   }
 
   void _log(String message) {
-    final timestamp = DateTime.now().toString().substring(11, 23);
-    final logLine = '[$timestamp] $message';
-    debugPrint('[TTS] $message');
-    _debugLogs.add(logLine);
-    if (_debugLogs.length > 150) {
-      _debugLogs.removeAt(0);
+    if (kDebugMode) {
+      log('[TTS] $message');
+      final timestamp = DateTime.now().toString().substring(11, 23);
+      final logLine = '[$timestamp] $message';
+      _debugLogs.add(logLine);
+      if (_debugLogs.length > 150) {
+        _debugLogs.removeAt(0);
+      }
     }
   }
 

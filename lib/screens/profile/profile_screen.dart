@@ -493,9 +493,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           color: AppColors.onSurfaceVariant,
           bgColor: AppColors.surfaceContainerLow,
           isLogout: true,
-          onTap: () {
-            ref.read(authProvider.notifier).logout();
-            context.go('/login');
+          onTap: () async {
+            await ref.read(authProvider.notifier).logout();
+            // GoRouter redirect 会自动导航到 /login
           },
         ),
       ],

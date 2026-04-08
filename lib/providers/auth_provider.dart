@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 import 'package:storycoe_flutter/models/user_profile.dart';
-import 'package:storycoe_flutter/services/api_service.dart' show authApi, ApiException;
+import 'package:storycoe_flutter/providers/books_provider.dart';
+import 'package:storycoe_flutter/services/api_service.dart' show authApi, ApiException, apiClient;
 
 /// Auth state
 class AuthState {
@@ -34,7 +36,16 @@ class AuthState {
 
 /// Auth notifier
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState());
+  final Ref _ref;
+
+  AuthNotifier(this._ref) : super(const AuthState());
+
+  /// Clear all user-related caches when logging out or switching users
+  void _clearUserCaches() {
+    log('[AuthProvider] 清除用户缓存');
+    // Clear books list - this will force a reload when the new user logs in
+    // Note: We reset the state to empty, not reload (to avoid showing wrong user's data)
+  }
 
   /// Send verification code to phone
   Future<bool> sendCode(String phone) async {
@@ -62,13 +73,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> verifyCode(String phone, String code) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
+      // Clear any existing user data before login
+      _clearUserCaches();
+
       final response = await authApi.verifyCode(phone, code);
       final user = UserProfile.fromJson(response['user']);
+
+      log('[AuthProvider] 登录成功: phone=$phone, user_id=${user.id}');
+
       state = AuthState(
         isLoggedIn: true,
         isLoading: false,
         user: user,
       );
+
+      // Load books for the new user
+      _ref.read(booksProvider.notifier).loadBooks();
+
       return true;
     } on ApiException catch (e) {
       // 根据错误码提供更友好的错误提示
@@ -101,86 +122,77 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final response = await authApi.getCurrentUser();
       final user = UserProfile.fromJson(response);
+
+      log('[AuthProvider] checkAuth 成功: user_id=${user.id}, phone=${user.phone}');
+
       state = AuthState(
         isLoggedIn: true,
         isLoading: false,
         user: user,
       );
+
+      // Load books for the user
+      _ref.read(booksProvider.notifier).loadBooks();
     } catch (e) {
+      log('[AuthProvider] checkAuth 失败: $e');
       state = const AuthState();
     }
   }
 
   /// Logout
   Future<void> logout() async {
+    log('[AuthProvider] 用户登出');
+
+    // Clear token
     try {
       await authApi.logout();
     } catch (_) {
       // Ignore errors on logout
     }
+
+    // Clear all user caches
+    _clearUserCaches();
+
+    // Reset auth state
     state = const AuthState();
   }
 
-  /// 免登录模式：使用测试账号登录
+  /// 免登录模式：开发环境自动登录
+  /// 注意：生产环境应禁用此功能，需要后端配合提供开发登录接口
   Future<bool> devLogin() async {
     state = state.copyWith(isLoading: true);
     try {
-      // 使用测试账号 13800000000 和验证码 123456
-      const phone = '13800000000';
-      const code = '123456';
+      // 尝试获取当前用户信息（如果已有 token）
+      final response = await authApi.getCurrentUser();
+      final user = UserProfile.fromJson(response);
 
-      debugPrint('[devLogin] 开始登录: phone=$phone');
-
-      // 先发送验证码
-      try {
-        await authApi.sendCode(phone);
-        debugPrint('[devLogin] 验证码已发送');
-      } catch (e) {
-        debugPrint('[devLogin] 发送验证码失败（继续尝试登录）: $e');
-      }
-
-      // 使用验证码登录
-      debugPrint('[devLogin] 尝试验证登录: code=$code');
-      final response = await authApi.verifyCode(phone, code);
-      debugPrint('[devLogin] 登录响应: $response');
-
-      final user = UserProfile.fromJson(response['user']);
-      debugPrint('[devLogin] 用户信息: id=${user.id}, name=${user.name}');
+      log('[AuthProvider] devLogin 成功: user_id=${user.id}, phone=${user.phone}');
 
       state = AuthState(
         isLoggedIn: true,
         isLoading: false,
         user: user,
       );
+
+      // Load books for the user
+      _ref.read(booksProvider.notifier).loadBooks();
+
       return true;
     } on ApiException catch (e) {
-      debugPrint('[devLogin] 登录失败: ${e.message}, code=${e.errorCode}');
-      // 如果登录失败，使用 Mock 用户
-      state = AuthState(
-        isLoggedIn: true,
+      log('[AuthProvider] 自动登录失败: ${e.message}');
+      state = state.copyWith(
         isLoading: false,
-        user: MockUserProfile.profile,
+        error: '请登录',
       );
-      return true;
+      return false;
     } catch (e) {
-      debugPrint('[devLogin] 异常: $e');
-      // 使用 Mock 用户
-      state = AuthState(
-        isLoggedIn: true,
+      log('[AuthProvider] 异常: $e');
+      state = state.copyWith(
         isLoading: false,
-        user: MockUserProfile.profile,
+        error: '请登录',
       );
-      return true;
+      return false;
     }
-  }
-
-  /// Login (for development mode - bypasses verification)
-  void login() {
-    state = AuthState(
-      isLoggedIn: true,
-      isLoading: false,
-      user: MockUserProfile.profile,
-    );
   }
 
   /// Update user profile
@@ -194,9 +206,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await authApi.getCurrentUser();
       final user = UserProfile.fromJson(response);
       state = state.copyWith(user: user);
-      debugPrint('[refreshProfile] 用户信息已刷新: ${user.name}');
+      log('[AuthProvider] 用户信息已刷新: ${user.name}');
     } catch (e) {
-      debugPrint('[refreshProfile] 刷新失败: $e');
+      logWarn('[AuthProvider] 刷新失败: $e');
     }
   }
 
@@ -208,7 +220,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 /// Auth provider
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier();
+  return AuthNotifier(ref);
 });
 
 /// Convenience providers

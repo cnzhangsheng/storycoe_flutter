@@ -1,17 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:storycoe_flutter/core/utils/logger.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:storycoe_flutter/providers/books_provider.dart';
 
-/// 日志工具
+/// Internal log function using AppLogger
 void _log(String message, [dynamic data]) {
-  final timestamp = DateTime.now().toString().substring(11, 23);
-  final logMsg = '[CreateProvider][$timestamp] $message';
-  if (data != null) {
-    debugPrint('$logMsg: $data');
-  } else {
-    debugPrint(logMsg);
+  if (kDebugMode) {
+    final logMsg = data != null ? '$message: $data' : message;
+    log('[CreateProvider] $logMsg');
   }
 }
 
@@ -59,6 +56,9 @@ class CreateState {
   /// 绘本标题
   final String title;
 
+  /// 分享类型：public 或 private
+  final String shareType;
+
   /// 是否正在生成
   final bool isGenerating;
 
@@ -76,6 +76,7 @@ class CreateState {
     this.images = const [],
     this.currentImageIndex = 0,
     this.title = '',
+    this.shareType = 'private',
     this.isGenerating = false,
     this.generateProgress = const GenerateProgress(),
     this.error,
@@ -100,6 +101,7 @@ class CreateState {
     List<SelectedImage>? images,
     int? currentImageIndex,
     String? title,
+    String? shareType,
     bool? isGenerating,
     GenerateProgress? generateProgress,
     String? error,
@@ -110,6 +112,7 @@ class CreateState {
       images: images ?? this.images,
       currentImageIndex: currentImageIndex ?? this.currentImageIndex,
       title: title ?? this.title,
+      shareType: shareType ?? this.shareType,
       isGenerating: isGenerating ?? this.isGenerating,
       generateProgress: generateProgress ?? this.generateProgress,
       error: error,
@@ -195,6 +198,11 @@ class CreateNotifier extends StateNotifier<CreateState> {
     state = state.copyWith(title: title);
   }
 
+  /// 设置分享类型
+  void setShareType(String shareType) {
+    state = state.copyWith(shareType: shareType);
+  }
+
   /// 开始生成（同步设置状态）
   void startGenerating() {
     state = state.copyWith(isGenerating: true, error: null);
@@ -202,10 +210,14 @@ class CreateNotifier extends StateNotifier<CreateState> {
 
   /// 生成绘本（异步版本 - 上传后立即返回）
   Future<String?> generateBook(String title) async {
+    // 先读取当前 shareType 值（避免异步过程中状态变化）
+    final currentShareType = state.shareType;
+
     _log('开始生成绘本', {
       'title': title,
       'imageCount': state.images.length,
       'hasCover': state.hasCover,
+      'shareType': currentShareType,
     });
 
     if (state.images.isEmpty) {
@@ -217,9 +229,8 @@ class CreateNotifier extends StateNotifier<CreateState> {
     // 状态已由 startGenerating() 设置，这里不需要再设置
 
     try {
-      // 获取 token
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
+      // 获取 token from secure storage
+      final token = await apiClient.getToken();
       _log('获取 token', {'hasToken': token != null, 'tokenLength': token?.length ?? 0});
 
       if (token == null || token.isEmpty) {
@@ -260,13 +271,14 @@ class CreateNotifier extends StateNotifier<CreateState> {
         return null;
       }
 
-      _log('调用 API', {'imageCount': imageData.length, 'hasCover': coverData != null});
+      _log('调用 API', {'imageCount': imageData.length, 'hasCover': coverData != null, 'shareType': currentShareType});
 
       // 调用新的异步 API
       final response = await generateApi.generateBook(
         title: title,
         cover: coverData,
         images: imageData,
+        shareType: currentShareType,
         token: token,
       );
 
