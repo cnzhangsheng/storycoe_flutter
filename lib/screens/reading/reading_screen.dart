@@ -797,21 +797,8 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
               },
             ),
 
-            // 作者菜单：编辑、分享类型、删除
+            // 作者菜单：分享类型、删除
             if (isOwner) ...[
-              const SizedBox(height: 12),
-
-              // 编辑按钮
-              _buildMenuButton(
-                icon: LucideIcons.pencil,
-                label: '编辑绘本',
-                color: AppColors.primaryContainer,
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _navigateToEditBook(context, book);
-                },
-              ),
-
               const SizedBox(height: 12),
 
               // 分享类型按钮
