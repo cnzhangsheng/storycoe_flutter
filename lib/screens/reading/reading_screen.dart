@@ -60,6 +60,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 是否显示滑动翻页提示
   bool _showSwipeHint = true;
 
+  /// 是否是绘本作者
+  bool _isOwner = false;
+
   @override
   void initState() {
     super.initState();
@@ -155,6 +158,16 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
     final totalPages = readingState.totalPages;
     final isLoading = readingState.isLoading;
     final error = readingState.error;
+
+    // 更新作者状态
+    final bookDetail = readingState.bookDetail;
+    final currentUser = ref.watch(userProfileProvider);
+    final isOwner = currentUser?.id == bookDetail?.userId;
+    if (_isOwner != isOwner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _isOwner = isOwner);
+      });
+    }
 
     // 错误处理
     if (error != null) {
@@ -1804,23 +1817,25 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   ) {
     return ReorderableListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: sentences.length + 1,
-      onReorder: (oldIndex, newIndex) async {
-        if (newIndex > oldIndex) {
-          newIndex -= 1;
-        }
+      itemCount: _isOwner ? sentences.length + 1 : sentences.length, // 非作者不显示添加按钮
+      onReorder: _isOwner
+          ? (oldIndex, newIndex) async {
+              if (newIndex > oldIndex) {
+                newIndex -= 1;
+              }
 
-        if (oldIndex >= sentences.length || newIndex >= sentences.length) {
-          return;
-        }
+              if (oldIndex >= sentences.length || newIndex >= sentences.length) {
+                return;
+              }
 
-        final newSentences = List<Sentence>.from(sentences);
-        final item = newSentences.removeAt(oldIndex);
-        newSentences.insert(newIndex, item);
+              final newSentences = List<Sentence>.from(sentences);
+              final item = newSentences.removeAt(oldIndex);
+              newSentences.insert(newIndex, item);
 
-        final sentenceIds = newSentences.map((s) => s.id).toList();
-        await ref.read(readingProvider.notifier).reorderSentences(sentenceIds);
-      },
+              final sentenceIds = newSentences.map((s) => s.id).toList();
+              await ref.read(readingProvider.notifier).reorderSentences(sentenceIds);
+            }
+          : (oldIndex, newIndex) {}, // 非作者禁用拖拽
       proxyDecorator: (child, index, animation) {
         // 拖拽时的样式
         return AnimatedBuilder(
@@ -1850,6 +1865,7 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
         );
       },
       itemBuilder: (context, index) {
+        // 添加句子按钮（仅作者可见）
         if (index == sentences.length) {
           return Container(
             key: const ValueKey('add_sentence_button'),
@@ -1868,10 +1884,13 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
             index: index + 1,
             isActive: isActive,
             showTranslation: showTranslation,
-            onEdit: (newText) {
-              _onSentenceEdit(sentence, newText);
-            },
-            onDelete: () => _onDeleteSentence(sentence.id),
+            isOwner: _isOwner, // 传递作者状态
+            onEdit: _isOwner
+                ? (newText) {
+                    _onSentenceEdit(sentence, newText);
+                  }
+                : null,
+            onDelete: _isOwner ? () => _onDeleteSentence(sentence.id) : null,
           ),
         );
       },

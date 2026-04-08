@@ -30,6 +30,7 @@ class SentenceReadItem extends ConsumerStatefulWidget {
   final int index;
   final bool isActive;
   final bool showTranslation;
+  final bool isOwner; // 是否是作者（用于控制编辑权限）
   final ValueChanged<String>? onEdit;
   final VoidCallback? onDelete;
   final bool isDragging;
@@ -40,6 +41,7 @@ class SentenceReadItem extends ConsumerStatefulWidget {
     required this.index,
     this.isActive = false,
     this.showTranslation = true,
+    this.isOwner = true, // 默认为作者
     this.onEdit,
     this.onDelete,
     this.isDragging = false,
@@ -105,8 +107,8 @@ class _SentenceReadItemState extends ConsumerState<SentenceReadItem>
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // 底层操作栏（仅在滑动时显示）
-        if (_swipeOffset < 0)
+        // 底层操作栏（仅在滑动时显示，且仅作者可见）
+        if (_swipeOffset < 0 && widget.isOwner)
           Positioned.fill(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -170,29 +172,35 @@ class _SentenceReadItemState extends ConsumerState<SentenceReadItem>
             ),
           ),
 
-        // 上层内容（可滑动）
+        // 上层内容（可滑动，仅作者可滑）
         GestureDetector(
-          onHorizontalDragStart: (_) {
-            _isSwiping = true;
-          },
-          onHorizontalDragUpdate: (details) {
-            if (!_isSwiping) return;
-            setState(() {
-              // 只允许左滑（负值），最大滑动一半宽度
-              _swipeOffset = (_swipeOffset + details.delta.dx).clamp(-actionWidth, 0.0);
-            });
-          },
-          onHorizontalDragEnd: (_) {
-            _isSwiping = false;
-            // 滑动超过一半时保持打开状态
-            if (_swipeOffset < -actionWidth / 2) {
-              setState(() {
-                _swipeOffset = -actionWidth;
-              });
-            } else {
-              _resetSwipe();
-            }
-          },
+          onHorizontalDragStart: widget.isOwner
+              ? (_) {
+                  _isSwiping = true;
+                }
+              : null,
+          onHorizontalDragUpdate: widget.isOwner
+              ? (details) {
+                  if (!_isSwiping) return;
+                  setState(() {
+                    // 只允许左滑（负值），最大滑动一半宽度
+                    _swipeOffset = (_swipeOffset + details.delta.dx).clamp(-actionWidth, 0.0);
+                  });
+                }
+              : null,
+          onHorizontalDragEnd: widget.isOwner
+              ? (_) {
+                  _isSwiping = false;
+                  // 滑动超过一半时保持打开状态
+                  if (_swipeOffset < -actionWidth / 2) {
+                    setState(() {
+                      _swipeOffset = -actionWidth;
+                    });
+                  } else {
+                    _resetSwipe();
+                  }
+                }
+              : null,
           onTap: _swipeOffset < 0 ? _resetSwipe : _onTap,
           child: AnimatedContainer(
             duration: _isSwiping ? Duration.zero : const Duration(milliseconds: 200),
