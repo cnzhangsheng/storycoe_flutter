@@ -70,6 +70,7 @@ class BookPage {
   final String bookId;
   final int pageNumber;
   final String? imageUrl;
+  final String status; // processing, completed, error
   final List<Sentence> sentences;
   final DateTime? createdAt;
 
@@ -78,9 +79,16 @@ class BookPage {
     required this.bookId,
     required this.pageNumber,
     this.imageUrl,
+    this.status = 'completed',
     this.sentences = const [],
     this.createdAt,
   });
+
+  /// 是否正在识别中
+  bool get isProcessing => status == 'processing';
+
+  /// 是否识别失败
+  bool get isError => status == 'error';
 
   /// 复制并修改
   BookPage copyWith({
@@ -88,6 +96,7 @@ class BookPage {
     String? bookId,
     int? pageNumber,
     String? imageUrl,
+    String? status,
     List<Sentence>? sentences,
     DateTime? createdAt,
   }) {
@@ -96,6 +105,7 @@ class BookPage {
       bookId: bookId ?? this.bookId,
       pageNumber: pageNumber ?? this.pageNumber,
       imageUrl: imageUrl ?? this.imageUrl,
+      status: status ?? this.status,
       sentences: sentences ?? this.sentences,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -114,6 +124,7 @@ class BookPage {
       bookId: (json['book_id'] ?? '') as String,
       pageNumber: json['page_number'] as int? ?? 1,
       imageUrl: json['image_url'] as String?,
+      status: json['status'] as String? ?? 'completed',
       sentences: sentences,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -127,6 +138,7 @@ class BookPage {
       'book_id': bookId,
       'page_number': pageNumber,
       'image_url': imageUrl,
+      'status': status,
       'sentences': sentences.map((s) => s.toJson()).toList(),
       'created_at': createdAt?.toIso8601String(),
     };

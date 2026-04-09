@@ -1146,7 +1146,7 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
     try {
       log('[ReadingProvider] [createPage] 创建页面');
 
-      await booksApi.createPage(
+      final response = await booksApi.createPage(
         bookId: state.currentBook!.id,
         filename: filename,
         imageBytes: imageBytes,
@@ -1156,6 +1156,12 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       // 刷新绘本详情
       await refreshBookDetail();
 
+      // 如果新页面状态是 processing，开始轮询
+      final newPageStatus = response['status'] as String? ?? 'completed';
+      if (newPageStatus == 'processing') {
+        _startPollingPageStatus(response['id'] as String);
+      }
+
       log('[ReadingProvider] [createPage] 页面创建成功');
       return true;
     } catch (e) {
@@ -1163,6 +1169,47 @@ class ReadingNotifier extends StateNotifier<ReadingState> {
       state = state.copyWith(error: '创建页面失败: $e');
       return false;
     }
+  }
+
+  /// ========================================
+  /// 轮询页面状态（OCR 识别中）
+  /// ========================================
+  void _startPollingPageStatus(String pageId) {
+    log('[ReadingProvider] [_startPollingPageStatus] 开始轮询页面状态: $pageId');
+
+    // 每 2 秒检查一次页面状态
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (state.currentBook == null) return;
+
+      try {
+        // 刷新绘本详情
+        final bookDetailData = await booksApi.getBook(state.currentBook!.id);
+        final bookDetail = BookDetail.fromJson(bookDetailData);
+
+        // 查找该页面的状态
+        final page = bookDetail.pages.where((p) => p.id == pageId).firstOrNull;
+        if (page == null) {
+          log('[ReadingProvider] [_startPollingPageStatus] 页面不存在，停止轮询');
+          return;
+        }
+
+        // 更新状态
+        state = state.copyWith(bookDetail: bookDetail);
+
+        // 如果仍在处理中，继续轮询
+        if (page.status == 'processing') {
+          _startPollingPageStatus(pageId);
+        } else {
+          log('[ReadingProvider] [_startPollingPageStatus] OCR 完成，状态: ${page.status}');
+          // 重新加载当前页面
+          await _loadPage(state.currentPage);
+        }
+      } catch (e) {
+        log('[ReadingProvider] [_startPollingPageStatus] 轮询失败: $e');
+        // 出错后继续轮询
+        _startPollingPageStatus(pageId);
+      }
+    });
   }
 
   /// ========================================

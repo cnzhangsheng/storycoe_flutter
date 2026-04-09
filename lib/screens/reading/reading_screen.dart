@@ -1893,11 +1893,16 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
   /// 句子列表区域
   /// ========================================
   Widget _buildSentencesList() {
-    final sentences = ref.watch(readingProvider).currentSentences;
-    final currentPage = ref.watch(readingProvider).currentPage;
-    final activeSentenceId = ref.watch(readingProvider).activeSentenceId;
-    final showTranslation = ref.watch(readingProvider).showTranslation;
-    final totalPages = ref.watch(readingProvider).totalPages;
+    final readingState = ref.watch(readingProvider);
+    final sentences = readingState.currentSentences;
+    final currentPage = readingState.currentPage;
+    final activeSentenceId = readingState.activeSentenceId;
+    final showTranslation = readingState.showTranslation;
+    final totalPages = readingState.totalPages;
+
+    // 获取当前页面状态
+    final currentPageData = readingState.currentPageData;
+    final isProcessing = currentPageData?.isProcessing ?? false;
 
     return Container(
       decoration: BoxDecoration(
@@ -1913,8 +1918,42 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
       ),
       child: Column(
         children: [
+          // 识别中提示
+          if (isProcessing)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.tertiaryContainer.withAlpha(25),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.tertiaryContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '正在识别文字，请稍候...',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.tertiaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 滑动翻页提示
-          if (_showSwipeHint && totalPages > 1)
+          if (_showSwipeHint && totalPages > 1 && !isProcessing)
             Container(
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
