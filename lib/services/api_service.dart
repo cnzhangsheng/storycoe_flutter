@@ -829,3 +829,147 @@ final booksApi = BooksApi(apiClient);
 final usersApi = UsersApi(apiClient);
 final readingApi = ReadingApi(apiClient);
 final generateApi = GenerateApi(apiClient);
+final gamificationApi = GamificationApi(apiClient);
+final leaderboardApi = LeaderboardApi(apiClient);
+
+
+/// ========================================
+/// Gamification API (游戏化激励系统)
+/// ========================================
+
+class GamificationApi {
+  final ApiClient _client;
+
+  GamificationApi(this._client);
+
+  /// 获取用户游戏化统计数据
+  Future<Map<String, dynamic>> getStats({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/stats');
+    _log('获取游戏化统计', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('游戏化统计结果', data);
+    return data;
+  }
+
+  /// 获取所有成就列表（包含解锁状态）
+  Future<Map<String, dynamic>> getAchievements({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/achievements');
+    _log('获取成就列表', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('成就列表结果', data);
+    return data;
+  }
+
+  /// 检查并解锁成就
+  Future<Map<String, dynamic>> checkAchievements({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/achievements/check');
+    _log('检查成就', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('检查成就结果', data);
+    return data;
+  }
+
+  /// 获取今日任务状态
+  Future<Map<String, dynamic>> getDailyTask({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/daily-task');
+    _log('获取每日任务', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('每日任务结果', data);
+    return data;
+  }
+
+  /// 领取每日任务奖励
+  Future<Map<String, dynamic>> claimDailyTaskReward({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/daily-task/claim');
+    _log('领取每日任务奖励', {'url': uri.toString()});
+
+    final response = await _client.post(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('领取奖励结果', data);
+    return data;
+  }
+
+  /// 初始化默认成就数据
+  Future<Map<String, dynamic>> initAchievements({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/gamification/init');
+    _log('初始化成就数据', {'url': uri.toString()});
+
+    final response = await _client.post(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('初始化结果', data);
+    return data;
+  }
+}
+
+
+/// ========================================
+/// Leaderboard API (排行榜)
+/// ========================================
+
+class LeaderboardApi {
+  final ApiClient _client;
+
+  LeaderboardApi(this._client);
+
+  /// 获取热门绘本榜
+  Future<Map<String, dynamic>> getHotBooks({
+    int limit = 10,
+    String? token,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/leaderboard/books/hot?limit=$limit');
+    _log('获取热门绘本榜', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('热门绘本榜结果', data);
+    return data;
+  }
+
+  /// 获取新星绘本榜
+  Future<Map<String, dynamic>> getNewBooks({
+    int days = 7,
+    int limit = 10,
+    String? token,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/leaderboard/books/new?days=$days&limit=$limit');
+    _log('获取新星绘本榜', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('新星绘本榜结果', data);
+    return data;
+  }
+
+  /// 获取活跃作者榜
+  Future<Map<String, dynamic>> getAuthors({
+    int limit = 10,
+    String? token,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/leaderboard/authors?limit=$limit');
+    _log('获取活跃作者榜', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('活跃作者榜结果', data);
+    return data;
+  }
+
+  /// 获取排行榜摘要（各榜单前3名）
+  Future<Map<String, dynamic>> getSummary({String? token}) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/leaderboard/summary');
+    _log('获取排行榜摘要', {'url': uri.toString()});
+
+    final response = await _client.get(uri, token: token);
+    final data = jsonDecode(response) as Map<String, dynamic>;
+    _log('排行榜摘要结果', data);
+    return data;
+  }
+}

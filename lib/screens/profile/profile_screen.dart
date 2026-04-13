@@ -7,6 +7,8 @@ import 'package:storycoe_flutter/core/theme/app_colors.dart';
 import 'package:storycoe_flutter/core/theme/app_theme.dart';
 import 'package:storycoe_flutter/providers/auth_provider.dart';
 import 'package:storycoe_flutter/providers/user_settings_provider.dart';
+import 'package:storycoe_flutter/providers/gamification_provider.dart';
+import 'package:storycoe_flutter/models/achievement.dart';
 import 'package:storycoe_flutter/services/api_service.dart';
 import 'package:storycoe_flutter/widgets/common/app_image.dart';
 import 'package:storycoe_flutter/widgets/common/bottom_nav.dart';
@@ -23,8 +25,20 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
+  void initState() {
+    super.initState();
+    // 加载游戏化数据
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(gamificationProvider.notifier).refreshAll();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProfileProvider);
+    final gamificationStats = ref.watch(gamificationStatsProvider);
+    final dailyTask = ref.watch(dailyTaskProvider);
+    final achievements = ref.watch(achievementsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surfaceContainerLowest,
@@ -49,8 +63,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                 const SizedBox(height: 32),
 
+                // 每日任务卡片
+                _buildDailyTaskCard(dailyTask),
+
+                const SizedBox(height: 24),
+
                 // 成就展示
-                _buildAchievementsSection(user),
+                _buildAchievementsSection(user, achievements),
 
                 const SizedBox(height: 32),
 
@@ -312,9 +331,243 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   /// ========================================
+  /// 每日任务卡片
+  /// ========================================
+  Widget _buildDailyTaskCard(DailyTask dailyTask) {
+    final isCompleted = dailyTask.completed;
+    final canClaim = isCompleted && !dailyTask.rewardClaimed;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            canClaim
+                ? AppColors.secondaryContainer.withValues(alpha: 0.15)
+                : AppColors.primaryContainer.withValues(alpha: 0.08),
+            Colors.white,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: canClaim
+              ? AppColors.secondaryContainer.withValues(alpha: 0.3)
+              : AppColors.primaryContainer.withValues(alpha: 0.15),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: canClaim
+                ? AppColors.secondaryContainer.withValues(alpha: 0.2)
+                : AppColors.primaryContainer.withValues(alpha: 0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题行
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.tertiaryContainer.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  LucideIcons.target,
+                  size: 20,
+                  color: AppColors.onTertiaryContainer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                '今日任务',
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.onSurface,
+                ),
+              ),
+              const Spacer(),
+              if (canClaim)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    '可领取',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // 任务内容
+          Row(
+            children: [
+              // 进度信息
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '阅读绘本 ${dailyTask.readBooks}/${dailyTask.targetBooks} 本',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onPrimaryFixed,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // 进度条
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: dailyTask.progressPercent / 100,
+                        backgroundColor: AppColors.surfaceContainerHigh,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isCompleted
+                              ? AppColors.secondaryContainer
+                              : AppColors.primaryContainer,
+                        ),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              // 奖励信息
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.onSurfaceVariant.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.star,
+                      size: 18,
+                      color: AppColors.secondaryContainer,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${dailyTask.rewardStars}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.secondaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // 领取按钮
+          if (canClaim)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final success = await ref.read(gamificationProvider.notifier).claimDailyTaskReward();
+                    if (success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('恭喜获得 20 星星！'),
+                          backgroundColor: AppColors.secondaryContainer,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      // 刷新用户数据
+                      ref.read(authProvider.notifier).refreshProfile();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondaryContainer,
+                    foregroundColor: AppColors.onSecondaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.gift, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        '领取奖励',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          if (dailyTask.rewardClaimed)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.checkCircle,
+                      size: 16,
+                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '奖励已领取',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// ========================================
   /// 成就展示 - 可爱的统计卡片
   /// ========================================
-  Widget _buildAchievementsSection(dynamic user) {
+  Widget _buildAchievementsSection(dynamic user, AchievementListResponse achievements) {
     return Column(
       children: [
         // 标题
@@ -342,6 +595,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 color: AppColors.onSurface,
               ),
             ),
+            const Spacer(),
+            // 成就进度
+            GestureDetector(
+              onTap: () => context.push('/profile/achievements'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryContainer.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${achievements.totalUnlocked}/${achievements.total}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      LucideIcons.chevronRight,
+                      size: 16,
+                      color: AppColors.primaryContainer,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
 
@@ -353,7 +637,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Expanded(
               child: _buildAchievementCard(
                 icon: LucideIcons.bookOpen,
-                value: '${user?.booksRead ?? 12}',
+                value: '${user?.booksRead ?? 0}',
                 label: '已读绘本',
                 color: AppColors.primaryContainer,
                 bgColor: AppColors.primaryContainer.withValues(alpha: 0.1),
@@ -363,7 +647,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Expanded(
               child: _buildAchievementCard(
                 icon: LucideIcons.star,
-                value: '${user?.stars ?? 156}',
+                value: '${user?.stars ?? 0}',
                 label: '累计星星',
                 color: AppColors.secondaryContainer,
                 bgColor: AppColors.secondaryContainer.withValues(alpha: 0.1),
@@ -373,7 +657,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Expanded(
               child: _buildAchievementCard(
                 icon: LucideIcons.flame,
-                value: '${user?.streak ?? 30}',
+                value: '${user?.streak ?? 0}',
                 label: '连续天数',
                 color: AppColors.tertiaryContainer,
                 bgColor: AppColors.tertiaryContainer.withValues(alpha: 0.1),

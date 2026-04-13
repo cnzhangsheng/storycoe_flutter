@@ -6,9 +6,11 @@ import 'package:storycoe_flutter/core/theme/app_colors.dart';
 import 'package:storycoe_flutter/core/theme/app_theme.dart';
 import 'package:storycoe_flutter/models/book.dart';
 import 'package:storycoe_flutter/providers/explore_provider.dart';
+import 'package:storycoe_flutter/providers/leaderboard_provider.dart';
 import 'package:storycoe_flutter/providers/reading_provider.dart';
 import 'package:storycoe_flutter/widgets/common/app_image.dart';
 import 'package:storycoe_flutter/widgets/common/bottom_nav.dart';
+import 'package:storycoe_flutter/widgets/leaderboard/leaderboard_section.dart';
 
 /// 探索页面
 class ExploreScreen extends ConsumerStatefulWidget {
@@ -27,6 +29,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     _searchController.addListener(() {
       ref.read(exploreProvider.notifier).setSearchTerm(_searchController.text);
     });
+    // 加载排行榜摘要数据
+    ref.read(leaderboardProvider.notifier).loadSummary();
   }
 
   @override
@@ -73,6 +77,27 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
                   letterSpacing: 2,
                 ),
+              ),
+              const SizedBox(height: 32),
+
+              // 排行榜区域
+              Consumer(
+                builder: (context, ref, child) {
+                  final summary = ref.watch(leaderboardSummaryProvider);
+                  return LeaderboardSection(
+                    hotBooks: summary.hotBooks,
+                    newBooks: summary.newBooks,
+                    authors: summary.authors,
+                    onViewAllHotBooks: () => context.go('/explore/leaderboard/hot'),
+                    onViewAllNewBooks: () => context.go('/explore/leaderboard/new'),
+                    onViewAllAuthors: () => context.go('/explore/leaderboard/authors'),
+                    onBookTap: (lbBook) {
+                      // 使用排行榜绘本数据跳转到阅读页
+                      ref.read(readingProvider.notifier).startReadingById(lbBook.id);
+                      context.go('/reading/${lbBook.id}');
+                    },
+                  );
+                },
               ),
               const SizedBox(height: 32),
 

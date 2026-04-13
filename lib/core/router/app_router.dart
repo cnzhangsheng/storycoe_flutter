@@ -11,6 +11,8 @@ import 'package:storycoe_flutter/screens/login/login_screen.dart';
 import 'package:storycoe_flutter/screens/profile/profile_screen.dart';
 import 'package:storycoe_flutter/screens/profile/parental_control_screen.dart';
 import 'package:storycoe_flutter/screens/profile/help_feedback_screen.dart';
+import 'package:storycoe_flutter/screens/profile/achievement_screen.dart';
+import 'package:storycoe_flutter/screens/explore/leaderboard_detail_screen.dart';
 import 'package:storycoe_flutter/screens/reading/reading_screen.dart';
 import 'package:storycoe_flutter/providers/create_provider.dart';
 
@@ -50,6 +52,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/explore',
         name: 'explore',
         builder: (context, state) => const ExploreScreen(),
+      ),
+      GoRoute(
+        path: '/explore/leaderboard/:type',
+        name: 'leaderboard-detail',
+        builder: (context, state) {
+          final type = state.pathParameters['type']!;
+          return LeaderboardDetailScreen(type: type);
+        },
       ),
       GoRoute(
         path: '/create',
@@ -95,6 +105,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile/help',
         name: 'help-feedback',
         builder: (context, state) => const HelpFeedbackScreen(),
+      ),
+      GoRoute(
+        path: '/profile/achievements',
+        name: 'achievements',
+        builder: (context, state) => const AchievementScreen(),
       ),
       GoRoute(
         path: '/reading/:bookId',
